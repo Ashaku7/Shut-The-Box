@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Shut the Box Game(Two-Player)</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            background-color: #8b4513;
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h20v20H0V0zm20 20h20v20H20V20zm20-20h20v20H40V0zm20 20h20v20H60V20zM0 40h20v20H0V40zm60 0h20v20H60V40zm20-20h20v20H80V20zm0 40h20v20H80V60zM0 60h20v20H0V60z' fill='%23714423' fill-opacity='0.4' fill-rule='evenodd'/%3E%3C/svg%3E");
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden; /* Prevent horizontal scrolling */
+            position: relative;
+        }
+        
+        /* Add subtle blown texture overlay */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background-image: url('https://www.transparenttextures.com/patterns/blown-paper.png');
+            opacity: 0.15;
+            z-index: 0;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            z-index: 1;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
+        .ui-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            z-index: 2;
+        }
+        
+        button {
+            padding: 12px 24px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            z-index: 2;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 5px;
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            z-index: 2;
+        }
+
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: white;
+            font-size: 24px;
+        }
+
+        #sumDisplay {
+            display: none !important;
+            /* Removed the box in the top left corner as per user request */
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">Loading 3D models...</div>
+    <div id="game-container">
+        <div id="status-message" class="status">Roll the dice to start!</div>
+        <div id="player-scores" class="status" style="top: 60px; font-size: 16px; background-color: rgba(255, 255, 255, 0.7); color: black; border-radius: 5px; padding: 5px 10px; width: 200px; left: 10px; transform: none; text-align: left; z-index: 2; position: absolute;">
+            Player 1 Score: 0<br>
+            Player 2 Score: 0
+        </div>
+        <div id="sumDisplay" style="display:none; position: absolute; top: 10px; left: 10px; color: white; font-size: 24px; font-family: monospace; background: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 5px; z-index: 10;"></div>
+        <div class="ui-container">
+            <button id="roll-btn">Roll Dice</button>
+            <button id="end-turn-btn" disabled>End Turn</button>
+            <button id="retry-roll-btn" style="display: none;">Retry Roll</button>
+            <button id="new-game-btn" style="display: none;">New Game</button>
+        </div>
+    </div>
+
+    <!-- Import Three.js and loaders -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+    <script>
+        // Game variables
+        let gameActive = true;
+        let canSelectTiles = false;
+        let isRolling = false;
+        let selectedTiles = [];
+        let diceTotal = 0;
+        let tiles = [];
+        let diceLoaded = false;
+        let sumDisplayed = false; // Global flag to ensure sum is displayed only once per roll
+
+        // Multiplayer variables
+        let currentPlayer = 1;
+        let playerScores = { 1: 0, 2: 0 };
+        let blockedPlayers = { 1: false, 2: false }; // Track players who cannot make moves
+        
+        // Three.js variables
+        let scene, camera, renderer, board;
+        let world;
+        
+        // 3D Dice variables
+        let diceMesh;
+        let diceArray = [];
+        let currentResult = [0, 0];
+        let sumDisplay = document.querySelector("#sumDisplay");
+        
+        // Dice parameters
+        const params = {
+            // dice
+            segments: 40,
+            edgeRadius: .08,
+            notchRadius: .15,
+            notchDepth: .17,
+            // physics
+            restitution: .3,
+            friction: .1,
+        };
+        
+        // DOM elements
+        const rollBtn = document.getElementById('roll-btn');
+        const endTurnBtn = document.getElementById('end-turn-btn');
+        const newGameBtn = document.getElementById('new-game-btn');
+        const statusMessage = document.getElementById('status-message');
+        const loadingDiv = document.getElementById('loading');
+        const playerScoresDiv = document.getElementById('player-scores');
+        
+        // Initialize game
+        init();
+        animate();
+        
+        // Event listeners
+        rollBtn.addEventListener('click', rollDice);
+        endTurnBtn.addEventListener('click', endTurn);
+        newGameBtn.addEventListener('click', resetGame);
+        
+        // Initialize the game
+        function init() {
+            // Create Three.js scene
+            scene = new THREE.Scene();
+            scene.background = null;
+            
+            // Create camera
+            camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 15, 20);
+            camera.lookAt(0, 0, 0);
+            
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000, 0);
+            renderer.shadowMap.enabled = true;
+            document.getElementById('game-container').appendChild(renderer.domElement);
+            
+            // Create lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 10, 7);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.camera.left = -10;
+            directionalLight.shadow.camera.right = 10;
+            directionalLight.shadow.camera.top = 10;
+            directionalLight.shadow.camera.bottom = -10;
+            scene.add(directionalLight);
+            
+            // Initialize physics world
+            world = new CANNON.World();
+            world.gravity.set(0, -20, 0); // Stronger gravity for better dice behavior
+            world.broadphase = new CANNON.NaiveBroadphase();
+            world.solver.iterations = 20; // More iterations for better stability
+            
+            // Create contact materials for better dice physics
+            const diceMaterial = new CANNON.Material('diceMaterial');
+            const boardMaterial = new CANNON.Material('boardMaterial');
+            
+            // Create contact between dice and board
+            const diceContactMaterial = new CANNON.ContactMaterial(
+                diceMaterial,
+                boardMaterial,
+                {
+                    friction: 0.3,
+                    restitution: 0.5 // Slightly bouncy
+                }
+            );
+            
+            // Create contact between dice
+            const diceDiceContactMaterial = new CANNON.ContactMaterial(
+                diceMaterial,
+                diceMaterial,
+                {
+                    friction: 0.4,
+                    restitution: 0.2
+                }
+            );
+            
+            world.addContactMaterial(diceContactMaterial);
+            world.addContactMaterial(diceDiceContactMaterial);
+            
+            // Create board
+            createBoard();
+            
+            // Create tiles
+            createTiles();
+            
+            // Create 3D dice
+            initDice();
+            
+            // Add event listener for window resize
+            window.addEventListener('resize', onWindowResize);
+            
+            // Add event listener for tile clicks
+            renderer.domElement.addEventListener('click', onTileClick);
+            
+            // Hide loading screen
+            loadingDiv.style.display = 'none';
+        }
+        
+        // Initialize 3D dice
+        function initDice() {
+            // Create 3D dice mesh
+            diceMesh = createDiceMesh();
+            
+            // Create two dice
+            for (let i = 0; i < 2; i++) {
+                diceArray.push(createDice());
+                addDiceEvents(diceArray[i], i);
+            }
+            
+            diceLoaded = true;
+        }
+        
+        // Create dice mesh
+        function createDiceMesh() {
+            const boxMaterialOuter = new THREE.MeshStandardMaterial({ color: 0xffffff });
+            const boxMaterialInner = new THREE.MeshStandardMaterial({
+                color: 0x000000,
+                roughness: 0,
+                metalness: 1,
+            });
+
+            const g = new THREE.Group();
+            const innerSide = 1 - params.edgeRadius;
+            const innerMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(innerSide, innerSide, innerSide),
+                boxMaterialInner
+            );
+            const outerMesh = new THREE.Mesh(createBoxGeometry(), boxMaterialOuter);
+            outerMesh.castShadow = true;
+            g.add(innerMesh, outerMesh);
+
+            return g;
+        }
+        
+        // Create dice
+        function createDice() {
+            const mesh = diceMesh.clone();
+            scene.add(mesh);
+
+            const shape = new CANNON.Box(new CANNON.Vec3(.5, .5, .5));
+            const mass = 1;
+            const sleepTimeLimit = .1; // Increased sleep time limit for better stability
+            
+            // Create body with proper material
+            const body = new CANNON.Body({ 
+                mass, 
+                shape, 
+                sleepTimeLimit,
+                material: new CANNON.Material('diceMaterial'),
+                angularDamping: 0.3, // Add damping to prevent excessive spinning
+                linearDamping: 0.2   // Add damping to slow down movement
+            });
+            
+            // Position dice above the board
+            body.position.set(0, 5, 0);
+            world.addBody(body);
+
+            return {
+                mesh,
+                body: body,
+                startPos: [null, null, null]
+            };
+        }
+        
+        // Create box geometry for dice
+        function createBoxGeometry() {
+            let boxGeometry = new THREE.BoxGeometry(1, 1, 1, params.segments, params.segments, params.segments);
+            const positionAttr = boxGeometry.attributes.position;
+            const subCubeHalfSize = .5 - params.edgeRadius;
+
+            const notchWave = (v) => {
+                v = (1 / params.notchRadius) * v;
+                v = Math.PI * Math.max(-1, Math.min(1, v));
+                return params.notchDepth * (Math.cos(v) + 1.);
+            };
+            const notch = (pos) => notchWave(pos[0]) * notchWave(pos[1]);
+
+            for (let i = 0; i < positionAttr.count; i++) {
+                let position = new THREE.Vector3().fromBufferAttribute(positionAttr, i);
+                const subCube = new THREE.Vector3(Math.sign(position.x), Math.sign(position.y), Math.sign(position.z)).multiplyScalar(subCubeHalfSize);
+                const addition = new THREE.Vector3().subVectors(position, subCube);
+
+                if (Math.abs(position.x) > subCubeHalfSize && Math.abs(position.y) > subCubeHalfSize && Math.abs(position.z) > subCubeHalfSize) {
+                    addition.normalize().multiplyScalar(params.edgeRadius);
+                    position = subCube.add(addition);
+                } else if (Math.abs(position.x) > subCubeHalfSize && Math.abs(position.y) > subCubeHalfSize) {
+                    addition.z = 0;
+                    addition.normalize().multiplyScalar(params.edgeRadius);
+                    position.x = subCube.x + addition.x;
+                    position.y = subCube.y + addition.y;
+                } else if (Math.abs(position.x) > subCubeHalfSize && Math.abs(position.z) > subCubeHalfSize) {
+                    addition.y = 0;
+                    addition.normalize().multiplyScalar(params.edgeRadius);
+                    position.x = subCube.x + addition.x;
+                    position.z = subCube.z + addition.z;
+                } else if (Math.abs(position.y) > subCubeHalfSize && Math.abs(position.z) > subCubeHalfSize) {
+                    addition.x = 0;
+                    addition.normalize().multiplyScalar(params.edgeRadius);
+                    position.y = subCube.y + addition.y;
+                    position.z = subCube.z + addition.z;
+                }
+
+                const offset = .23;
+                if (position.y === .5) {
+                    position.y -= notch([position.x, position.z]);
+                } else if (position.x === .5) {
+                    position.x -= notch([position.y + offset, position.z + offset]);
+                    position.x -= notch([position.y - offset, position.z - offset]);
+                } else if (position.z === .5) {
+                    position.z -= notch([position.x - offset, position.y + offset]);
+                    position.z -= notch([position.x, position.y]);
+                    position.z -= notch([position.x + offset, position.y - offset]);
+                } else if (position.z === -.5) {
+                    position.z += notch([position.x + offset, position.y + offset]);
+                    position.z += notch([position.x + offset, position.y - offset]);
+                    position.z += notch([position.x - offset, position.y + offset]);
+                    position.z += notch([position.x - offset, position.y - offset]);
+                } else if (position.x === -.5) {
+                    position.x += notch([position.y + offset, position.z + offset]);
+                    position.x += notch([position.y + offset, position.z - offset]);
+                    position.x += notch([position.y, position.z]);
+                    position.x += notch([position.y - offset, position.z + offset]);
+                    position.x += notch([position.y - offset, position.z - offset]);
+                } else if (position.y === -.5) {
+                    position.y += notch([position.x + offset, position.z + offset]);
+                    position.y += notch([position.x + offset, position.z]);
+                    position.y += notch([position.x + offset, position.z - offset]);
+                    position.y += notch([position.x - offset, position.z + offset]);
+                    position.y += notch([position.x - offset, position.z]);
+                    position.y += notch([position.x - offset, position.z - offset]);
+                }
+
+                positionAttr.setXYZ(i, position.x, position.y, position.z);
+            }
+
+            boxGeometry.deleteAttribute("normal");
+            boxGeometry.deleteAttribute("uv");
+            boxGeometry = THREE.BufferGeometryUtils.mergeVertices(boxGeometry);
+            boxGeometry.computeVertexNormals();
+
+            return boxGeometry;
+        }
+        
+        // Add dice events
+function addDiceEvents(dice, diceIdx) {
+            // Removed sleep event listener to implement manual dice settling detection in animation loop
+        }
+        
+        // Helper function to determine dice face value based on quaternion using Euler angles (adapted from index3.html)
+        function getDiceFaceValue(quaternion) {
+            const euler = new CANNON.Vec3();
+            quaternion.toEuler(euler);
+
+            const eps = 0.1;
+            const isZero = (angle) => Math.abs(angle) < eps;
+            const isHalfPi = (angle) => Math.abs(angle - 0.5 * Math.PI) < eps;
+            const isMinusHalfPi = (angle) => Math.abs(angle + 0.5 * Math.PI) < eps;
+            const isPiOrMinusPi = (angle) => (Math.abs(Math.PI - angle) < eps || Math.abs(Math.PI + angle) < eps);
+
+            let faceValue = 0;
+
+            if (isZero(euler.z)) {
+                if (isZero(euler.x)) {
+                    faceValue = 1;
+                } else if (isHalfPi(euler.x)) {
+                    faceValue = 4;
+                } else if (isMinusHalfPi(euler.x)) {
+                    faceValue = 3;
+                } else if (isPiOrMinusPi(euler.x)) {
+                    faceValue = 6;
+                } else {
+                    // Unknown orientation, return 0 to indicate invalid face
+                    return 0;
+                }
+            } else if (isHalfPi(euler.z)) {
+                faceValue = 2;
+            } else if (isMinusHalfPi(euler.z)) {
+                faceValue = 5;
+            } else {
+                // Unknown orientation, return 0 to indicate invalid face
+                return 0;
+            }
+
+            console.log(`getDiceFaceValue: euler=(${euler.x.toFixed(2)}, ${euler.y.toFixed(2)}, ${euler.z.toFixed(2)}), faceValue=${faceValue}`);
+            return faceValue;
+        }
+        
+        // Manual dice settling detection in animation loop
+function checkDiceSettled() {
+            if (!isRolling) return;
+    
+            let allSettled = true;
+            for (let i = 0; i < diceArray.length; i++) {
+                const dice = diceArray[i];
+                const velocity = dice.body.velocity.length();
+                const angularVelocity = dice.body.angularVelocity.length();
+    
+                // Thresholds for considering dice settled
+                if (velocity > 0.1 || angularVelocity > 0.1) {
+                    allSettled = false;
+                    break;
+                }
+            }
+    
+            if (allSettled) {
+                // Clear the roll timeout timer if dice settled before timeout
+                if (rollTimeoutId) {
+                    clearTimeout(rollTimeoutId);
+                    rollTimeoutId = null;
+                }
+
+                // Determine dice face values
+                for (let i = 0; i < diceArray.length; i++) {
+                    const dice = diceArray[i];
+                    console.log(`Dice ${i} quaternion:`, dice.body.quaternion);
+                    const faceValue = getDiceFaceValue(dice.body.quaternion);
+                    console.log(`Dice ${i} faceValue: ${faceValue}`);
+                    if (faceValue) {
+                        currentResult[i] = faceValue;
+                    } else {
+                        // If face detection fails, keep rolling
+                        return;
+                    }
+                }
+                console.log(`checkDiceSettled: currentResult=${currentResult}`);
+    
+                if (!sumDisplayed && currentResult[0] !== 0 && currentResult[1] !== 0) {
+                    const sum = currentResult.reduce((a, v) => a + v, 0);
+                    console.log(`Both dice settled. Sum: ${sum}`);
+                    diceTotal = sum;
+    
+                    // Update game status
+                    statusMessage.textContent = `You rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
+                    sumDisplay.textContent = `You have rolled ${diceTotal}`;
+                    sumDisplay.style.display = 'block';
+                    console.log('Sum display shown:', sumDisplay.textContent);
+                    isRolling = false;
+                    canSelectTiles = true;
+                    rollBtn.disabled = false;
+                    sumDisplayed = true;
+    
+                    // Check if any valid moves are available
+                    if (!hasValidMoves()) {
+                        // Mark current player as blocked
+                        blockedPlayers[currentPlayer] = true;
+                        // Check if both players are blocked
+                        if (blockedPlayers[1] && blockedPlayers[2]) {
+                            // Both players blocked, end game with highest score winner
+                            endGame(determineWinner());
+                        } else {
+                            // Switch to other player
+                            currentPlayer = currentPlayer === 1 ? 2 : 1;
+                            statusMessage.textContent = `Player ${currentPlayer}'s turn. Roll the dice. (Previous player blocked)`;
+                            rollBtn.disabled = false;
+                            canSelectTiles = false;
+                        }
+                    } else {
+                        // Current player can play, reset blocked status
+                        blockedPlayers[currentPlayer] = false;
+                    }
+                }
+            }
+        }
+        
+        // Roll dice function
+function rollDice() {
+            if (!gameActive || isRolling || !diceLoaded) return;
+            
+            console.log('rollDice function called');
+            isRolling = true;
+            rollBtn.disabled = true;
+            statusMessage.textContent = "Rolling...";
+            sumDisplayed = false; // Reset sumDisplayed flag at start of roll
+            console.log('Roll started, sumDisplayed reset to false');
+
+            // Hide retry button if visible and clear any existing timer
+            retryRollBtn.style.display = 'none';
+            if (rollTimeoutId) {
+                clearTimeout(rollTimeoutId);
+                rollTimeoutId = null;
+            }
+
+            // Start 10 second timer to show retry button if dice roll takes too long
+            rollTimeoutId = setTimeout(() => {
+                if (isRolling) {
+                    statusMessage.textContent = "Dice roll taking too long. Click Retry Roll.";
+                    retryRollBtn.style.display = 'inline-block';
+                    rollBtn.disabled = true;
+                }
+            }, 10000);
+            
+            // Reset dice values
+            currentResult = [0, 0];
+            // sumDisplay.textContent = `Sum: 0`; // Removed sum display update
+            
+            // Apply random forces to dice
+            const quaternion = new THREE.Quaternion();
+            
+            diceArray.forEach((d, dIdx) => {
+                // Generate random starting position within the green region boundaries (reduced space)
+                d.startPos = [Math.random(), Math.random(), Math.random()];
+                quaternion.setFromEuler(new THREE.Euler(2 * Math.PI * d.startPos[0], 0, 2 * Math.PI * d.startPos[1]));
+                
+                // Use more controlled force with increased magnitude for better rolling
+                const force = 8 + 4 * d.startPos[2]; // Increased force
+                
+                // Position dice above the two tile rows within the green region boundaries
+                // Green region width approx 8 units (reduced from 10), depth approx 2 units centered at z=-5 and z=5
+                const diceX = (Math.random() * 8) - 4; // Random X between -4 and 4 (within green region width)
+                const diceY = 6; // Height above the board
+                const diceZPositions = [-5, 5]; // Above top and bottom tile rows (green region centers)
+                
+                d.body.position = new CANNON.Vec3(diceX, diceY, diceZPositions[dIdx]);
+                d.body.velocity.setZero();
+                d.body.angularVelocity.setZero();
+                
+                // Apply impulse in a more dynamic direction
+                d.body.applyImpulse(
+                    new CANNON.Vec3(
+                        force * (Math.random() - 0.5), // Random X direction
+                        force * 0.7,                   // Stronger upward force
+                        force * (Math.random() - 0.5)  // Random Z direction
+                    ),
+                    new CANNON.Vec3(0, 0, 0)           // Apply at center of mass
+                );
+                
+                // Apply random rotation with higher angular velocity
+                d.body.angularVelocity.set(
+                    Math.random() * 15 - 7.5,
+                    Math.random() * 15 - 7.5,
+                    Math.random() * 15 - 7.5
+                );
+                
+                d.body.quaternion.copy(quaternion);
+                d.body.allowSleep = true;
+            });
+        }
+        
+        // Create the wooden board
+        function createBoard() {
+            // Create wooden board material
+            const boardMaterial = new THREE.MeshStandardMaterial({
+                color: 0x8B4513,
+                roughness: 0.8,
+                metalness: 0.2,
+                bumpScale: 0.02
+            });
+            
+            // Create base board
+            const boardGeometry = new THREE.BoxGeometry(12, 1, 16);
+            board = new THREE.Mesh(boardGeometry, boardMaterial);
+            board.position.y = -0.5;
+            board.receiveShadow = true;
+            scene.add(board);
+            
+            // Create dark leather playing surface
+            const leatherMaterial = new THREE.MeshStandardMaterial({
+                color: 0x1a472a,
+                roughness: 0.9,
+                metalness: 0.0
+            });
+            
+            const playAreaGeometry = new THREE.BoxGeometry(10, 0.1, 12);
+            const playArea = new THREE.Mesh(playAreaGeometry, leatherMaterial);
+            playArea.position.y = 0.1;
+            scene.add(playArea);
+            
+            // Add board to physics world with proper material
+            const boardShape = new CANNON.Box(new CANNON.Vec3(6, 0.5, 8));
+            const boardBody = new CANNON.Body({ 
+                mass: 0,
+                material: new CANNON.Material('boardMaterial')
+            });
+            boardBody.addShape(boardShape);
+            boardBody.position.set(0, -0.5, 0);
+            world.addBody(boardBody);
+            
+            // Add walls to keep dice on the board
+            const wallThickness = 0.5;
+            const wallHeight = 2;
+            
+            // Left wall
+            const leftWallShape = new CANNON.Box(new CANNON.Vec3(wallThickness, wallHeight, 8));
+            const leftWallBody = new CANNON.Body({ mass: 0 });
+            leftWallBody.addShape(leftWallShape);
+            leftWallBody.position.set(-6.5, wallHeight, 0);
+            world.addBody(leftWallBody);
+            
+            // Right wall
+            const rightWallShape = new CANNON.Box(new CANNON.Vec3(wallThickness, wallHeight, 8));
+            const rightWallBody = new CANNON.Body({ mass: 0 });
+            rightWallBody.addShape(rightWallShape);
+            rightWallBody.position.set(6.5, wallHeight, 0);
+            world.addBody(rightWallBody);
+            
+            // Front wall
+            const frontWallShape = new CANNON.Box(new CANNON.Vec3(6, wallHeight, wallThickness));
+            const frontWallBody = new CANNON.Body({ mass: 0 });
+            frontWallBody.addShape(frontWallShape);
+            frontWallBody.position.set(0, wallHeight, 8.5);
+            world.addBody(frontWallBody);
+            
+            // Back wall
+            const backWallShape = new CANNON.Box(new CANNON.Vec3(6, wallHeight, wallThickness));
+            const backWallBody = new CANNON.Body({ mass: 0 });
+            backWallBody.addShape(backWallShape);
+            backWallBody.position.set(0, wallHeight, -8.5);
+            world.addBody(backWallBody);
+
+            // Add two thin static collision planes above the two tile rows for dice to land on
+            const diceLandingHeight = 0.6; // Slightly above tile height (tiles at y=0.35)
+            const diceLandingThickness = 0.1;
+            const diceLandingWidth = 10;
+            const diceLandingDepth = 2;
+
+            // Top tile row landing plane
+            const topLandingShape = new CANNON.Box(new CANNON.Vec3(diceLandingWidth / 2, diceLandingThickness / 2, diceLandingDepth / 2));
+            const topLandingBody = new CANNON.Body({ mass: 0 });
+            topLandingBody.addShape(topLandingShape);
+            topLandingBody.position.set(0, diceLandingHeight, -5);
+            world.addBody(topLandingBody);
+
+            // Bottom tile row landing plane
+            const bottomLandingShape = new CANNON.Box(new CANNON.Vec3(diceLandingWidth / 2, diceLandingThickness / 2, diceLandingDepth / 2));
+            const bottomLandingBody = new CANNON.Body({ mass: 0 });
+            bottomLandingBody.addShape(bottomLandingShape);
+            bottomLandingBody.position.set(0, diceLandingHeight, 5);
+            world.addBody(bottomLandingBody);
+        }
+        
+        // Create the number tiles
+        function createTiles() {
+            const tileGeometry = new THREE.BoxGeometry(1, 0.5, 2);
+            const tileMaterial = new THREE.MeshStandardMaterial({
+                color: 0xD2B48C,
+                roughness: 0.7,
+                metalness: 0.1
+            });
+            
+            // Create top row of tiles (flipped upside down in image)
+            for (let i = 0; i < 9; i++) {
+                const tile = new THREE.Mesh(tileGeometry, tileMaterial.clone());
+                tile.position.set(-4 + i, 0.35, -5);
+                tile.castShadow = true;
+                tile.receiveShadow = true;
+                tile.userData = { value: i + 1, isShut: false, isSelected: false, player: 1 };
+                
+                // Add number to tile
+                addNumberToTile(tile, i + 1);
+                
+                scene.add(tile);
+                tiles.push(tile);
+            }
+            
+            // Create bottom row of tiles
+            for (let i = 0; i < 9; i++) {
+                const tile = new THREE.Mesh(tileGeometry, tileMaterial.clone());
+                tile.position.set(-4 + i, 0.35, 5);
+                tile.castShadow = true;
+                tile.receiveShadow = true;
+                tile.userData = { value: i + 1, isShut: false, isSelected: false, player: 2 };
+                
+                // Add number to tile
+                addNumberToTile(tile, i + 1);
+                
+                scene.add(tile);
+                tiles.push(tile);
+            }
+        }
+        
+        // Add number text to tile
+        function addNumberToTile(tile, number) {
+            const loader = new THREE.FontLoader();
+            loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', function (font) {
+                const textGeometry = new THREE.TextGeometry(number.toString(), {
+                    font: font,
+                    size: 0.4,
+                    height: 0.05,
+                    curveSegments: 12,
+                    bevelEnabled: false
+                });
+                const textMaterial = new THREE.MeshBasicMaterial({ color: 0x333333 });
+                const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+                textMesh.position.set(-0.2, 0.3, 0.7);
+                textMesh.rotation.x = -Math.PI / 2;
+                tile.add(textMesh);
+            });
+        }
+        
+
+        
+        // Roll dice function
+        let rollTimeoutId = null; // Timer ID for dice roll timeout
+        const retryRollBtn = document.getElementById('retry-roll-btn');
+
+        retryRollBtn.addEventListener('click', () => {
+            // Hide retry button and re-roll dice
+            retryRollBtn.style.display = 'none';
+            rollDice();
+        });
+
+        
+        // Check if player has valid moves
+        function hasValidMoves() {
+            const openTiles = tiles.filter(tile => tile.userData.player === currentPlayer && !tile.userData.isShut);
+            const openValues = openTiles.map(tile => tile.userData.value);
+            
+            // Check if dice total can be made with any combination of open tiles
+            return hasValidCombination(openValues, diceTotal);
+        }
+        
+        // Recursive function to check if a combination of values can sum to target
+        function hasValidCombination(values, target, start = 0, currentSum = 0) {
+            if (currentSum === target) return true;
+            if (currentSum > target) return false;
+            
+            for (let i = start; i < values.length; i++) {
+                if (hasValidCombination(values, target, i + 1, currentSum + values[i])) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+        
+        // Handle tile selection via raycasting
+        function onTileClick(event) {
+            if (!canSelectTiles) return;
+            
+            // Calculate mouse position
+            const mouse = new THREE.Vector2();
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            // Create raycaster
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, camera);
+            
+            // Check for intersections with tiles of the current player only
+            const playerTiles = tiles.filter(tile => tile.userData.player === currentPlayer);
+            const intersects = raycaster.intersectObjects(playerTiles);
+            
+            if (intersects.length > 0) {
+                const tile = intersects[0].object;
+                
+                // Ignore if tile is already shut
+                if (tile.userData.isShut) return;
+                
+                selectTile(tile);
+            }
+        }
+        
+        // Handle tile selection
+        function selectTile(tile) {
+            const tileValue = tile.userData.value;
+            
+            if (tile.userData.isSelected) {
+                // Deselect the tile
+                tile.userData.isSelected = false;
+                tile.position.y = 0.35; // Reset position
+                selectedTiles = selectedTiles.filter(val => val !== tileValue);
+            } else {
+                // Select the tile
+                tile.userData.isSelected = true;
+                tile.position.y = 0.6; // Raise the tile
+                selectedTiles.push(tileValue);
+            }
+            
+            const currentSum = selectedTiles.reduce((sum, val) => sum + val, 0);
+            console.log(`selectTile: selectedTiles=${selectedTiles}, currentSum=${currentSum}, diceTotal=${diceTotal}`);
+            
+            if (currentSum === diceTotal) {
+                endTurnBtn.disabled = false;
+                statusMessage.textContent = `Player ${currentPlayer}: Selected tiles sum to ${diceTotal}. End your turn to shut them.`;
+            } else if (currentSum > diceTotal) {
+                statusMessage.textContent = `Player ${currentPlayer}: Sum exceeds ${diceTotal}! Deselect some tiles.`;
+                endTurnBtn.disabled = true;
+            } else {
+                statusMessage.textContent = `Player ${currentPlayer}: Current selection: ${currentSum}. Target: ${diceTotal}`;
+                endTurnBtn.disabled = true;
+            }
+        }
+        
+        // End turn and shut selected tiles
+        function endTurn() {
+            if (selectedTiles.length === 0) return;
+            
+            // Shut selected tiles and mark them with current player
+            for (const tile of tiles) {
+                if (tile.userData.player === currentPlayer && tile.userData.isSelected) {
+                    shutTile(tile, currentPlayer);
+                }
+            }
+            
+            // Update player score (sum of shut tiles this turn)
+            const turnScore = selectedTiles.reduce((sum, val) => sum + val, 0);
+            playerScores[currentPlayer] += turnScore;
+            updatePlayerScoresUI();
+            
+            selectedTiles = [];
+            endTurnBtn.disabled = true;
+            
+            // Check if all tiles are shut for current player (win condition)
+            const playerTiles = tiles.filter(tile => tile.userData.player === currentPlayer);
+            const allShut = playerTiles.every(tile => tile.userData.isShut);
+            
+            if (allShut) {
+                statusMessage.textContent = `Player ${currentPlayer} wins by shutting the box!`;
+                gameActive = false;
+                rollBtn.style.display = 'none';
+                endTurnBtn.style.display = 'none';
+                newGameBtn.style.display = 'block';
+            } else {
+                // Reset blocked status for current player since they successfully closed tiles
+                blockedPlayers[currentPlayer] = false;
+                // Switch to next player
+                currentPlayer = currentPlayer === 1 ? 2 : 1;
+                statusMessage.textContent = `Player ${currentPlayer}'s turn. Roll the dice.`; 
+                rollBtn.disabled = false;
+                canSelectTiles = false;
+            }
+        }
+        
+        // Enhanced checkDiceSettled to handle blocked players and game end
+        function checkDiceSettled() {
+            if (!isRolling) return;
+    
+            let allSettled = true;
+            for (let i = 0; i < diceArray.length; i++) {
+                const dice = diceArray[i];
+                const velocity = dice.body.velocity.length();
+                const angularVelocity = dice.body.angularVelocity.length();
+    
+                // Thresholds for considering dice settled
+                if (velocity > 0.1 || angularVelocity > 0.1) {
+                    allSettled = false;
+                    break;
+                }
+            }
+    
+            if (allSettled) {
+                // Clear the roll timeout timer if dice settled before timeout
+                if (rollTimeoutId) {
+                    clearTimeout(rollTimeoutId);
+                    rollTimeoutId = null;
+                }
+
+                // Determine dice face values
+                for (let i = 0; i < diceArray.length; i++) {
+                    const dice = diceArray[i];
+                    const faceValue = getDiceFaceValue(dice.body.quaternion);
+                    if (faceValue) {
+                        currentResult[i] = faceValue;
+                    } else {
+                        // If face detection fails, keep rolling
+                        return;
+                    }
+                }
+    
+                if (!sumDisplayed && currentResult[0] !== 0 && currentResult[1] !== 0) {
+                    const sum = currentResult.reduce((a, v) => a + v, 0);
+                    diceTotal = sum;
+    
+                    // Update game status
+                    statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
+                    sumDisplay.textContent = `You have rolled ${diceTotal}`;
+                    sumDisplay.style.display = 'block';
+                    isRolling = false;
+                    canSelectTiles = true;
+                    rollBtn.disabled = false;
+                    sumDisplayed = true;
+    
+                    // Check if any valid moves are available
+                    if (!hasValidMoves()) {
+                        // Mark current player as blocked
+                        blockedPlayers[currentPlayer] = true;
+                        // Check if both players are blocked
+                        if (blockedPlayers[1] && blockedPlayers[2]) {
+                            // Both players blocked, end game with highest score winner
+                            const winner = determineWinner();
+                            endGame(winner);
+                        } else {
+                            // Switch to other player
+                            currentPlayer = currentPlayer === 1 ? 2 : 1;
+                            statusMessage.textContent = `Player ${currentPlayer}'s turn. Roll the dice. (Previous player blocked)`;
+                            rollBtn.disabled = false;
+                            canSelectTiles = false;
+                        }
+                    } else {
+                        // Current player can play, reset blocked status
+                        blockedPlayers[currentPlayer] = false;
+                    }
+                }
+            }
+        }
+        
+        // Determine winner based on highest score
+        function determineWinner() {
+            if (playerScores[1] > playerScores[2]) {
+                return 1;
+            } else if (playerScores[2] > playerScores[1]) {
+                return 2;
+            } else {
+                return null; // Tie
+            }
+        }
+        
+        // End game when no valid moves are available or a player wins
+        function endGame(winner = null) {
+            if (winner) {
+                statusMessage.textContent = `Game over! Player ${winner} wins with the highest score!`;
+            } else {
+                statusMessage.textContent = `Game over! It's a tie!`;
+            }
+            gameActive = false;
+            rollBtn.style.display = 'none';
+            endTurnBtn.style.display = 'none';
+            newGameBtn.style.display = 'block';
+        }
+        
+        // Shut a tile with animation and mark with player color
+        function shutTile(tile, player) {
+            tile.userData.isSelected = false;
+            tile.userData.isShut = true;
+            tile.userData.shutBy = player;
+
+            // Change tile color based on player
+            if (player === 1) {
+                tile.material.color.set(0x4CAF50); // Green for player 1
+            } else {
+                tile.material.color.set(0x2196F3); // Blue for player 2
+            }
+            
+            // Animate tile flipping
+            const duration = 500; // Animation duration in ms
+            const startTime = Date.now();
+            
+            function animate() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Rotate tile around X axis
+                tile.rotation.x = progress * Math.PI;
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    // Animation complete
+                    tile.rotation.x = Math.PI;
+                }
+            }
+            
+            animate();
+        }
+        
+        // End game when no valid moves are available
+        function endGame(winner = null) {
+            if (winner) {
+                statusMessage.textContent = `Game over! Player ${winner} wins with the highest score!`;
+            } else {
+                const openTiles = tiles.slice(0, 9).filter(tile => !tile.userData.isShut);
+                const score = openTiles.reduce((sum, tile) => sum + tile.userData.value, 0);
+                statusMessage.textContent = `Game over! Your score is ${score} (lower is better).`;
+            }
+            gameActive = false;
+            rollBtn.style.display = 'none';
+            endTurnBtn.style.display = 'none';
+            newGameBtn.style.display = 'block';
+        }
+        
+        // Reset game
+        function resetGame() {
+            // Reset tiles
+            for (let i = 0; i < 9; i++) {
+                const tile = tiles[i];
+                tile.userData.isShut = false;
+                tile.userData.isSelected = false;
+                tile.userData.shutBy = null;
+                tile.rotation.x = 0;
+                tile.position.y = 0.35;
+                tile.material.color.set(0xD2B48C); // Reset to original color
+            }
+            
+            // Reset dice
+            currentResult = [0, 0];
+            // sumDisplay.textContent = `Sum: 0`; // Removed sum display update
+            
+            // Reset game state
+            selectedTiles = [];
+            diceTotal = 0;
+            gameActive = true;
+            canSelectTiles = false;
+            currentPlayer = 1;
+            playerScores = { 1: 0, 2: 0 };
+            updatePlayerScoresUI();
+            
+            statusMessage.textContent = "Roll the dice to start!";
+            
+            rollBtn.style.display = 'block';
+            rollBtn.disabled = false;
+            endTurnBtn.style.display = 'block';
+            endTurnBtn.disabled = true;
+            newGameBtn.style.display = 'none';
+        }
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Update physics world
+            world.step(1/60);
+            
+            // Update dice positions from physics
+            for (const dice of diceArray) {
+                // Copy position and rotation from physics body to visual mesh
+                dice.mesh.position.copy(dice.body.position);
+                dice.mesh.quaternion.copy(dice.body.quaternion);
+                
+                // Safety check - if dice falls off the board, reset its position
+                if (dice.body.position.y < -10 || 
+                    Math.abs(dice.body.position.x) > 4 ||  // Reduced boundary for X to green region width
+                    (dice.body.position.z < -6 || dice.body.position.z > 6)) {  // Reduced boundary for Z to green region depth
+                    
+                    // Reset dice position within green region boundaries
+                    const resetX = (Math.random() * 8) - 4; // X between -4 and 4
+                    const resetZOptions = [-5, 5]; // Z positions for top and bottom green regions
+                    const resetZ = resetZOptions[Math.floor(Math.random() * resetZOptions.length)];
+                    
+                    dice.body.position.set(
+                        resetX,
+                        5,                      // Height above the board
+                        resetZ
+                    );
+                    dice.body.velocity.set(0, 0, 0);
+                    dice.body.angularVelocity.set(0, 0, 0);
+                }
+            }
+            
+            checkDiceSettled();
+            
+            renderer.render(scene, camera);
+        }
+        
+        // Update player scores UI
+        function updatePlayerScoresUI() {
+            playerScoresDiv.innerHTML = `Player 1 Score: ${playerScores[1]}<br>Player 2 Score: ${playerScores[2]}`;
+        }
+        
+        // Handle window resize
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>

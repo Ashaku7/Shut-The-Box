@@ -131,6 +131,26 @@
     <script>
 const socket = io('https://shut-the-box-1.onrender.com');
 
+socket.on('connect_error', (error) => {
+    console.error('Connection error:', error);
+    statusMessage.textContent = 'Connection error. Please check your network or try again later.';
+});
+
+socket.on('connect_timeout', () => {
+    console.error('Connection timeout');
+    statusMessage.textContent = 'Connection timeout. Please check your network or try again later.';
+});
+
+socket.on('reconnect_attempt', (attempt) => {
+    console.log(`Reconnection attempt #${attempt}`);
+    statusMessage.textContent = `Reconnecting... (attempt ${attempt})`;
+});
+
+socket.on('reconnect_failed', () => {
+    console.error('Reconnection failed');
+    statusMessage.textContent = 'Reconnection failed. Please refresh the page to try again.';
+});
+
         // Game variables
         let gameActive = false;
         let canSelectTiles = false;
@@ -751,7 +771,7 @@ rollBtn.addEventListener('click', () => {
     // Remove socket.emit here; emit after dice settle
 });
 
-checkDiceSettled();
+            checkDiceSettled();
             renderer.render(scene, camera);
         }
 

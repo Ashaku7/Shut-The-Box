@@ -48,3 +48,7 @@ The "Play vs Bot" mode is planned but currently under development. Selecting thi
 - Bot version of the game to be developed.
 
 Enjoy playing Shut the Box!
+
+## current progress
+.need to deploy the backend server and connect it to the frontend sever through vercel.
+.improve the ui design and add more features like sound effects and animations.

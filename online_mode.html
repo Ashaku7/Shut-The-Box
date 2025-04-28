@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Shut the Box - Online Mode</title>
+    <style>
+        :root {
+            --wood-color: #8b4513;
+            --board-green: #1e7145;
+            --header-green: #0f5738;
+            --button-hover: #19593a;
+            --text-white: #fff;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Arial', sans-serif;
+            background-color: var(--wood-color);
+            color: var(--text-white);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 400px;
+            width: 90%;
+            padding: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 30px;
+            text-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+        }
+
+        .mode-btn {
+            display: block;
+            width: 100%;
+            padding: 15px 20px;
+            margin-bottom: 15px;
+            background-color: var(--header-green);
+            color: var(--text-white);
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            transition: background-color 0.3s ease;
+        }
+
+        .mode-btn:hover {
+            background-color: var(--button-hover);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .mode-btn:active {
+            transform: translateY(1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        #message {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #ffcc00;
+            min-height: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Online Mode - Select Number of Players</h1>
+        <button class="mode-btn" id="two-player-btn">2 Player</button>
+        <button class="mode-btn" id="three-player-btn">3 Player</button>
+        <button class="mode-btn" id="four-player-btn">4 Player</button>
+        <div id="message"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const twoPlayerBtn = document.getElementById('two-player-btn');
+            const threePlayerBtn = document.getElementById('three-player-btn');
+            const fourPlayerBtn = document.getElementById('four-player-btn');
+            const messageDiv = document.getElementById('message');
+
+            twoPlayerBtn.addEventListener('click', () => {
+                window.location.href = 'online_2player.html';
+            });
+
+            function showUnderConstruction() {
+                messageDiv.textContent = 'This mode is under construction.';
+                setTimeout(() => {
+                    messageDiv.textContent = '';
+                }, 3000);
+            }
+
+            threePlayerBtn.addEventListener('click', showUnderConstruction);
+            fourPlayerBtn.addEventListener('click', showUnderConstruction);
+        });
+    </script>
+</body>
+</html>

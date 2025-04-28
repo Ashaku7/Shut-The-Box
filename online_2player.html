@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>3D Shut the Box Game - Online 2 Player</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            background-color: #8b4513;
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h20v20H0V0zm20 20h20v20H20V20zm20-20h20v20H40V0zm20 20h20v20H60V20zM0 40h20v20H0V40zm60 0h20v20H60V40zm20-20h20v20H80V20zm0 40h20v20H80V60zM0 60h20v20H0V60z' fill='%23714423' fill-opacity='0.4' fill-rule='evenodd'/%3E%3C/svg%3E");
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            position: relative;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background-image: url('https://www.transparenttextures.com/patterns/blown-paper.png');
+            opacity: 0.15;
+            z-index: 0;
+        }
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            z-index: 1;
+        }
+        canvas {
+            display: block;
+        }
+        .ui-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            z-index: 2;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            z-index: 2;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 5px;
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            z-index: 2;
+        }
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: white;
+            font-size: 24px;
+        }
+        #sumDisplay {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">Loading 3D models...</div>
+    <div id="game-container">
+        <div id="status-message" class="status">Enter a room ID to start or join a game.</div>
+        <div id="room-container" style="position:absolute; top:60px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.7); padding:10px 20px; border-radius:8px; z-index:3; color:white; font-size:16px;">
+            <input type="text" id="room-input" placeholder="Enter room ID" />
+            <button id="join-room-btn">Join Room</button>
+        </div>
+        <div id="player-scores" class="status" style="top: 100px; font-size: 16px; background-color: rgba(255, 255, 255, 0.7); color: black; border-radius: 5px; padding: 5px 10px; width: 200px; left: 10px; transform: none; text-align: left; z-index: 2; position: absolute;">
+            Player 1 Score: 0<br>
+            Player 2 Score: 0
+        </div>
+        <div id="sumDisplay" style="display:none; position: absolute; top: 10px; left: 10px; color: white; font-size: 24px; font-family: monospace; background: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 5px; z-index: 10;"></div>
+        <div class="ui-container" style="display:none;">
+            <button id="roll-btn">Roll Dice</button>
+            <button id="end-turn-btn" disabled>End Turn</button>
+            <button id="retry-roll-btn" style="display: none;">Retry Roll</button>
+            <button id="new-game-btn" style="display: none;">New Game</button>
+        </div>
+    </div>
+
+    <!-- Import socket.io client -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <!-- Import Three.js and loaders -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+
+    <script>
+        const socket = io('http://localhost:3000');
+
+        // Game variables
+        let gameActive = false;
+        let canSelectTiles = false;
+        let isRolling = false;
+        let selectedTiles = [];
+        let diceTotal = 0;
+        let tiles = [];
+        let diceLoaded = false;
+        let sumDisplayed = false;
+
+        // Multiplayer variables
+        let currentPlayer = null;
+        let playerNumber = null;
+        let playerScores = { 1: 0, 2: 0 };
+        let blockedPlayers = { 1: false, 2: false };
+
+        // Three.js variables
+        let scene, camera, renderer, board;
+        let world;
+
+        // 3D Dice variables
+        let diceMesh;
+        let diceArray = [];
+        let currentResult = [0, 0];
+        let sumDisplay = document.querySelector("#sumDisplay");
+
+        // Dice parameters
+        const params = {
+            segments: 40,
+            edgeRadius: 0.08,
+            notchRadius: 0.15,
+            notchDepth: 0.17,
+            restitution: 0.3,
+            friction: 0.1,
+        };
+
+        // DOM elements
+        const rollBtn = document.getElementById('roll-btn');
+        const endTurnBtn = document.getElementById('end-turn-btn');
+        const newGameBtn = document.getElementById('new-game-btn');
+        const retryRollBtn = document.getElementById('retry-roll-btn');
+        const statusMessage = document.getElementById('status-message');
+        const playerScoresDiv = document.getElementById('player-scores');
+        const loadingDiv = document.getElementById('loading');
+        const joinRoomBtn = document.getElementById('join-room-btn');
+        const roomInput = document.getElementById('room-input');
+        const uiContainer = document.querySelector('.ui-container');
+
+        // Event listeners for room join
+        joinRoomBtn.addEventListener('click', () => {
+            const inputRoomId = roomInput.value.trim();
+            if (!inputRoomId) {
+                alert('Please enter a room ID.');
+                return;
+            }
+            socket.emit('joinRoom', inputRoomId);
+            roomInput.disabled = true;
+            joinRoomBtn.disabled = true;
+            statusMessage.textContent = `Joined room ${inputRoomId}. Waiting for other player...`;
+        });
+
+        socket.on('connect', () => {
+            console.log('Connected to server with id:', socket.id);
+        });
+
+        socket.on('assignPlayerNumber', (num) => {
+            playerNumber = num;
+            statusMessage.textContent = `You are Player ${playerNumber}. Waiting for other player...`;
+        });
+
+        socket.on('startGame', () => {
+            gameActive = true;
+            currentPlayer = 1;
+            statusMessage.textContent = `Game started! Player ${currentPlayer}'s turn.`;
+            uiContainer.style.display = 'flex';
+            loadingDiv.style.display = 'none';
+            updatePlayerScoresUI();
+            updateUI();
+        });
+
+        socket.on('diceRolled', (data) => {
+            diceTotal = data.diceTotal;
+            currentPlayer = data.currentPlayer;
+            statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
+            canSelectTiles = (playerNumber === currentPlayer);
+            isRolling = false;
+            updateUI();
+        });
+
+        socket.on('tileShut', (data) => {
+            shutTileByServer(data.tileValue, data.player);
+            updatePlayerScores(data.player, data.score);
+        });
+
+        socket.on('nextTurn', (data) => {
+            currentPlayer = data.nextPlayer;
+            selectedTiles = [];
+            canSelectTiles = (playerNumber === currentPlayer);
+            statusMessage.textContent = `Player ${currentPlayer}'s turn. Roll the dice.`;
+            updateUI();
+        });
+
+        socket.on('gameOver', (data) => {
+            gameActive = false;
+            statusMessage.textContent = data.message;
+            rollBtn.disabled = true;
+            endTurnBtn.disabled = true;
+            newGameBtn.style.display = 'block';
+        });
+
+        socket.on('disconnect', () => {
+            statusMessage.textContent = 'Disconnected from server.';
+            rollBtn.disabled = true;
+            endTurnBtn.disabled = true;
+        });
+
+        // Initialize game
+        init();
+        animate();
+
+        // Initialize the game
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = null;
+
+            camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 15, 20);
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000, 0);
+            renderer.shadowMap.enabled = true;
+            document.getElementById('game-container').appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 10, 7);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.camera.left = -10;
+            directionalLight.shadow.camera.right = 10;
+            directionalLight.shadow.camera.top = 10;
+            directionalLight.shadow.camera.bottom = -10;
+            scene.add(directionalLight);
+
+            world = new CANNON.World();
+            world.gravity.set(0, -20, 0);
+            world.broadphase = new CANNON.NaiveBroadphase();
+            world.solver.iterations = 20;
+
+            const diceMaterial = new CANNON.Material('diceMaterial');
+            const boardMaterial = new CANNON.Material('boardMaterial');
+
+            const diceContactMaterial = new CANNON.ContactMaterial(
+                diceMaterial,
+                boardMaterial,
+                {
+                    friction: 0.3,
+                    restitution: 0.5
+                }
+            );
+
+            const diceDiceContactMaterial = new CANNON.ContactMaterial(
+                diceMaterial,
+                diceMaterial,
+                {
+                    friction: 0.4,
+                    restitution: 0.2
+                }
+            );
+
+            world.addContactMaterial(diceContactMaterial);
+            world.addContactMaterial(diceDiceContactMaterial);
+
+            createBoard();
+            createTiles();
+            initDice();
+
+            window.addEventListener('resize', onWindowResize);
+            renderer.domElement.addEventListener('click', onTileClick);
+
+            loadingDiv.style.display = 'none';
+        }
+
+        function initDice() {
+            diceMesh = createDiceMesh();
+
+            for (let i = 0; i < 2; i++) {
+                diceArray.push(createDice());
+            }
+
+            diceLoaded = true;
+        }
+
+        function createDiceMesh() {
+            const boxMaterialOuter = new THREE.MeshStandardMaterial({ color: 0xffffff });
+            const boxMaterialInner = new THREE.MeshStandardMaterial({
+                color: 0x000000,
+                roughness: 0,
+                metalness: 1,
+            });
+
+            const g = new THREE.Group();
+            const innerSide = 1 - params.edgeRadius;
+            const innerMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(innerSide, innerSide, innerSide),
+                boxMaterialInner
+            );
+            const outerMesh = new THREE.Mesh(createBoxGeometry(), boxMaterialOuter);
+            outerMesh.castShadow = true;
+            g.add(innerMesh, outerMesh);
+
+            return g;
+        }
+
+        // Create box geometry for dice
+        function createBoxGeometry() {
+            let boxGeometry = new THREE.BoxGeometry(1, 1, 1, params.segments, params.segments, params.segments);
+            const positionAttr = boxGeometry.attributes.position;
+            const subCubeHalfSize = .5 - params.edgeRadius;
+
+            const notchWave = (v) => {
+                v = (1 / params.notchRadius) * v;
+                v = Math.PI * Math.max(-1, Math.min(1, v));
+                return params.notchDepth * (Math.cos(v) + 1.);
+            };
+            const notch = (pos) => notchWave(pos[0]) * notchWave(pos[1]);
+
+            for (let i = 0; i < positionAttr.count; i++) {
+                let position = new THREE.Vector3().fromBufferAttribute(positionAttr, i);
+                const subCube = new THREE.Vector3(Math.sign(position.x), Math.sign(position.y), Math.sign(position.z)).multiplyScalar(subCubeHalfSize);
+                const addition = new THREE.Vector3().subVectors(position, subCube);
+
+                if (Math.abs(position.x) > subCubeHalfSize && Math.abs(position.y) > subCubeHalfSize && Math.abs(position.z) > subCubeHalfSize) {
+                    addition.normalize().multiplyScalar(params.edgeRadius);
+                    position = subCube.add(addition);
+                } else if (Math.abs(position.x) > subCubeHalfSize && Math.abs(position.y) > subCubeHalfSize) {
+                    addition.z = 0;
+                    addition.normalize().multiplyScalar(params.edgeRadius);
+                    position.x = subCube.x + addition.x;
+                    position.y = subCube.y + addition.y;
+                } else if (Math.abs(position.x) > subCubeHalfSize && Math.abs(position.z) > subCubeHalfSize) {
+                    addition.y = 0;
+                    addition.normalize().multiplyScalar(params.edgeRadius);
+                    position.x = subCube.x + addition.x;
+                    position.z = subCube.z + addition.z;
+                } else if (Math.abs(position.y) > subCubeHalfSize && Math.abs(position.z) > subCubeHalfSize) {
+                    addition.x = 0;
+                    addition.normalize().multiplyScalar(params.edgeRadius);
+                    position.y = subCube.y + addition.y;
+                    position.z = subCube.z + addition.z;
+                }
+
+                const offset = .23;
+                if (position.y === .5) {
+                    position.y -= notch([position.x, position.z]);
+                } else if (position.x === .5) {
+                    position.x -= notch([position.y + offset, position.z + offset]);
+                    position.x -= notch([position.y - offset, position.z - offset]);
+                } else if (position.z === .5) {
+                    position.z -= notch([position.x - offset, position.y + offset]);
+                    position.z -= notch([position.x, position.y]);
+                    position.z -= notch([position.x + offset, position.y - offset]);
+                } else if (position.z === -.5) {
+                    position.z += notch([position.x + offset, position.y + offset]);
+                    position.z += notch([position.x + offset, position.y - offset]);
+                    position.z += notch([position.x - offset, position.y + offset]);
+                    position.z += notch([position.x - offset, position.y - offset]);
+                } else if (position.x === -.5) {
+                    position.x += notch([position.y + offset, position.z + offset]);
+                    position.x += notch([position.y + offset, position.z - offset]);
+                    position.x += notch([position.y, position.z]);
+                    position.x += notch([position.y - offset, position.z + offset]);
+                    position.x += notch([position.y - offset, position.z - offset]);
+                } else if (position.y === -.5) {
+                    position.y += notch([position.x + offset, position.z + offset]);
+                    position.y += notch([position.x + offset, position.z]);
+                    position.y += notch([position.x + offset, position.z - offset]);
+                    position.y += notch([position.x - offset, position.z + offset]);
+                    position.y += notch([position.x - offset, position.z]);
+                    position.y += notch([position.x - offset, position.z - offset]);
+                }
+
+                positionAttr.setXYZ(i, position.x, position.y, position.z);
+            }
+
+            boxGeometry.deleteAttribute("normal");
+            boxGeometry.deleteAttribute("uv");
+            boxGeometry = THREE.BufferGeometryUtils.mergeVertices(boxGeometry);
+            boxGeometry.computeVertexNormals();
+
+            return boxGeometry;
+        }
+
+        function createDice() {
+            const mesh = diceMesh.clone();
+            scene.add(mesh);
+
+            const shape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5));
+            const mass = 1;
+            const sleepTimeLimit = 0.1;
+
+            const body = new CANNON.Body({
+                mass,
+                shape,
+                sleepTimeLimit,
+                material: new CANNON.Material('diceMaterial'),
+                angularDamping: 0.3,
+                linearDamping: 0.2
+            });
+
+            body.position.set(0, 5, 0);
+            world.addBody(body);
+
+            return { mesh, body, startPos: [null, null, null] };
+        }
+
+        function addNumberToTile(tile, number) {
+            const loader = new THREE.FontLoader();
+            loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', function (font) {
+                const textGeometry = new THREE.TextGeometry(number.toString(), {
+                    font: font,
+                    size: 0.4,
+                    height: 0.05,
+                    curveSegments: 12,
+                    bevelEnabled: false
+                });
+                const textMaterial = new THREE.MeshBasicMaterial({ color: 0x333333 });
+                const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+                textMesh.position.set(-0.2, 0.3, 0.7);
+                textMesh.rotation.x = -Math.PI / 2;
+                tile.add(textMesh);
+            });
+        }
+
+        function createBoard() {
+            const boardMaterial = new THREE.MeshStandardMaterial({
+                color: 0x8B4513,
+                roughness: 0.8,
+                metalness: 0.2,
+                bumpScale: 0.02
+            });
+
+            const boardGeometry = new THREE.BoxGeometry(12, 1, 16);
+            board = new THREE.Mesh(boardGeometry, boardMaterial);
+            board.position.y = -0.5;
+            board.receiveShadow = true;
+            scene.add(board);
+
+            const leatherMaterial = new THREE.MeshStandardMaterial({
+                color: 0x1a472a,
+                roughness: 0.9,
+                metalness: 0.0
+            });
+
+            const playAreaGeometry = new THREE.BoxGeometry(10, 0.1, 12);
+            const playArea = new THREE.Mesh(playAreaGeometry, leatherMaterial);
+            playArea.position.y = 0.1;
+            scene.add(playArea);
+
+            const boardShape = new CANNON.Box(new CANNON.Vec3(6, 0.5, 8));
+            const boardBody = new CANNON.Body({
+                mass: 0,
+                material: new CANNON.Material('boardMaterial')
+            });
+            boardBody.addShape(boardShape);
+            boardBody.position.set(0, -0.5, 0);
+            world.addBody(boardBody);
+
+            const wallThickness = 0.5;
+            const wallHeight = 2;
+
+            const leftWallShape = new CANNON.Box(new CANNON.Vec3(wallThickness, wallHeight, 8));
+            const leftWallBody = new CANNON.Body({ mass: 0 });
+            leftWallBody.addShape(leftWallShape);
+            leftWallBody.position.set(-6.5, wallHeight, 0);
+            world.addBody(leftWallBody);
+
+            const rightWallShape = new CANNON.Box(new CANNON.Vec3(wallThickness, wallHeight, 8));
+            const rightWallBody = new CANNON.Body({ mass: 0 });
+            rightWallBody.addShape(rightWallShape);
+            rightWallBody.position.set(6.5, wallHeight, 0);
+            world.addBody(rightWallBody);
+
+            const frontWallShape = new CANNON.Box(new CANNON.Vec3(6, wallHeight, wallThickness));
+            const frontWallBody = new CANNON.Body({ mass: 0 });
+            frontWallBody.addShape(frontWallShape);
+            frontWallBody.position.set(0, wallHeight, 8.5);
+            world.addBody(frontWallBody);
+
+            const backWallShape = new CANNON.Box(new CANNON.Vec3(6, wallHeight, wallThickness));
+            const backWallBody = new CANNON.Body({ mass: 0 });
+            backWallBody.addShape(backWallShape);
+            backWallBody.position.set(0, wallHeight, -8.5);
+            world.addBody(backWallBody);
+
+            const diceLandingHeight = 0.6;
+            const diceLandingThickness = 0.1;
+            const diceLandingWidth = 10;
+            const diceLandingDepth = 2;
+
+            const topLandingShape = new CANNON.Box(new CANNON.Vec3(diceLandingWidth / 2, diceLandingThickness / 2, diceLandingDepth / 2));
+            const topLandingBody = new CANNON.Body({ mass: 0 });
+            topLandingBody.addShape(topLandingShape);
+            topLandingBody.position.set(0, diceLandingHeight, -5);
+            world.addBody(topLandingBody);
+
+            const bottomLandingShape = new CANNON.Box(new CANNON.Vec3(diceLandingWidth / 2, diceLandingThickness / 2, diceLandingDepth / 2));
+            const bottomLandingBody = new CANNON.Body({ mass: 0 });
+            bottomLandingBody.addShape(bottomLandingShape);
+            bottomLandingBody.position.set(0, diceLandingHeight, 5);
+            world.addBody(bottomLandingBody);
+        }
+
+        function createTiles() {
+            const tileGeometry = new THREE.BoxGeometry(1, 0.5, 2);
+            const tileMaterial = new THREE.MeshStandardMaterial({
+                color: 0xD2B48C,
+                roughness: 0.7,
+                metalness: 0.1
+            });
+
+            for (let i = 0; i < 9; i++) {
+                const tile = new THREE.Mesh(tileGeometry, tileMaterial.clone());
+                tile.position.set(-4 + i, 0.35, -5);
+                tile.castShadow = true;
+                tile.receiveShadow = true;
+                tile.userData = { value: i + 1, isShut: false, isSelected: false, player: 1 };
+                addNumberToTile(tile, i + 1);
+                scene.add(tile);
+                tiles.push(tile);
+            }
+
+            for (let i = 0; i < 9; i++) {
+                const tile = new THREE.Mesh(tileGeometry, tileMaterial.clone());
+                tile.position.set(-4 + i, 0.35, 5);
+                tile.castShadow = true;
+                tile.receiveShadow = true;
+                tile.userData = { value: i + 1, isShut: false, isSelected: false, player: 2 };
+                addNumberToTile(tile, i + 1);
+                scene.add(tile);
+                tiles.push(tile);
+            }
+        }
+
+        function getDiceFaceValue(quaternion) {
+            const euler = new CANNON.Vec3();
+            quaternion.toEuler(euler);
+
+            const eps = 0.1;
+            const isZero = (angle) => Math.abs(angle) < eps;
+            const isHalfPi = (angle) => Math.abs(angle - 0.5 * Math.PI) < eps;
+            const isMinusHalfPi = (angle) => Math.abs(angle + 0.5 * Math.PI) < eps;
+            const isPiOrMinusPi = (angle) => (Math.abs(Math.PI - angle) < eps || Math.abs(Math.PI + angle) < eps);
+
+            let faceValue = 0;
+
+            if (isZero(euler.z)) {
+                if (isZero(euler.x)) {
+                    faceValue = 1;
+                } else if (isHalfPi(euler.x)) {
+                    faceValue = 4;
+                } else if (isMinusHalfPi(euler.x)) {
+                    faceValue = 3;
+                } else if (isPiOrMinusPi(euler.x)) {
+                    faceValue = 6;
+                } else {
+                    return 0;
+                }
+            } else if (isHalfPi(euler.z)) {
+                faceValue = 2;
+            } else if (isMinusHalfPi(euler.z)) {
+                faceValue = 5;
+            } else {
+                return 0;
+            }
+
+            return faceValue;
+        }
+
+        let rollTimeoutId = null;
+
+        retryRollBtn.addEventListener('click', () => {
+            retryRollBtn.style.display = 'none';
+            if (gameActive && playerNumber === currentPlayer) {
+                socket.emit('rollDice', { roomId: roomInput.value.trim() });
+            }
+        });
+
+        function checkDiceSettled() {
+            if (!isRolling) return;
+
+            let allSettled = true;
+            for (let i = 0; i < diceArray.length; i++) {
+                const dice = diceArray[i];
+                const velocity = dice.body.velocity.length();
+                const angularVelocity = dice.body.angularVelocity.length();
+
+                if (velocity > 0.1 || angularVelocity > 0.1) {
+                    allSettled = false;
+                    break;
+                }
+            }
+
+            if (allSettled) {
+                if (rollTimeoutId) {
+                    clearTimeout(rollTimeoutId);
+                    rollTimeoutId = null;
+                }
+
+                for (let i = 0; i < diceArray.length; i++) {
+                    const dice = diceArray[i];
+                    const faceValue = getDiceFaceValue(dice.body.quaternion);
+                    if (faceValue) {
+                        currentResult[i] = faceValue;
+                    } else {
+                        return;
+                    }
+                }
+
+                if (!sumDisplayed && currentResult[0] !== 0 && currentResult[1] !== 0) {
+                    const sum = currentResult.reduce((a, v) => a + v, 0);
+                    diceTotal = sum;
+                    statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
+                    sumDisplay.textContent = `You have rolled ${diceTotal}`;
+                    sumDisplay.style.display = 'block';
+                    isRolling = false;
+                    canSelectTiles = (playerNumber === currentPlayer);
+                    rollBtn.disabled = !canSelectTiles;
+                    sumDisplayed = true;
+                }
+            }
+        }
+
+        rollBtn.addEventListener('click', () => {
+            if (!gameActive || isRolling || playerNumber !== currentPlayer) return;
+
+            isRolling = true;
+            rollBtn.disabled = true;
+            statusMessage.textContent = "Rolling...";
+            sumDisplayed = false;
+
+            currentResult = [0, 0];
+
+            const quaternion = new THREE.Quaternion();
+
+            diceArray.forEach((d, dIdx) => {
+                d.startPos = [Math.random(), Math.random(), Math.random()];
+                quaternion.setFromEuler(new THREE.Euler(2 * Math.PI * d.startPos[0], 0, 2 * Math.PI * d.startPos[1]));
+
+                const force = 8 + 4 * d.startPos[2];
+
+                const diceX = (Math.random() * 8) - 4;
+                const diceY = 6;
+                const diceZPositions = [-5, 5];
+
+                d.body.position = new CANNON.Vec3(diceX, diceY, diceZPositions[dIdx]);
+                d.body.velocity.setZero();
+                d.body.angularVelocity.setZero();
+
+                d.body.applyImpulse(
+                    new CANNON.Vec3(
+                        force * (Math.random() - 0.5),
+                        force * 0.7,
+                        force * (Math.random() - 0.5)
+                    ),
+                    new CANNON.Vec3(0, 0, 0)
+                );
+
+                d.body.angularVelocity.set(
+                    Math.random() * 15 - 7.5,
+                    Math.random() * 15 - 7.5,
+                    Math.random() * 15 - 7.5
+                );
+
+                d.body.quaternion.copy(quaternion);
+                d.body.allowSleep = true;
+            });
+
+            socket.emit('rollDice', { roomId: roomInput.value.trim(), diceTotal: null, player: playerNumber });
+        });
+
+        function shutTileByServer(tileValue, player) {
+            const tile = tiles.find(t => t.userData.value === tileValue && !t.userData.isShut);
+            if (!tile) return;
+            tile.userData.isShut = true;
+            tile.userData.shutBy = player;
+            tile.material.color.set(player === 1 ? 0x4CAF50 : 0x2196F3);
+            const duration = 500;
+            const startTime = Date.now();
+            function animate() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                tile.rotation.x = progress * Math.PI;
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    tile.rotation.x = Math.PI;
+                }
+            }
+            animate();
+        }
+
+        function selectTile(tile) {
+            const tileValue = tile.userData.value;
+
+            if (tile.userData.isSelected) {
+                tile.userData.isSelected = false;
+                tile.position.y = 0.35;
+                selectedTiles = selectedTiles.filter(val => val !== tileValue);
+            } else {
+                tile.userData.isSelected = true;
+                tile.position.y = 0.6;
+                selectedTiles.push(tileValue);
+            }
+
+            const currentSum = selectedTiles.reduce((sum, val) => sum + val, 0);
+
+            if (currentSum === diceTotal) {
+                endTurnBtn.disabled = false;
+                statusMessage.textContent = `Selected tiles sum to ${diceTotal}. End your turn to shut them.`;
+            } else if (currentSum > diceTotal) {
+                statusMessage.textContent = `Sum exceeds ${diceTotal}! Deselect some tiles.`;
+                endTurnBtn.disabled = true;
+            } else {
+                statusMessage.textContent = `Current selection: ${currentSum}. Target: ${diceTotal}`;
+                endTurnBtn.disabled = true;
+            }
+        }
+
+        endTurnBtn.addEventListener('click', () => {
+            if (selectedTiles.length === 0 || playerNumber !== currentPlayer) return;
+
+            selectedTiles.forEach(tileValue => {
+                socket.emit('shutTile', { roomId: roomInput.value.trim(), player: playerNumber, tileValue });
+            });
+
+            const turnScore = selectedTiles.reduce((sum, val) => sum + val, 0);
+            playerScores[playerNumber] += turnScore;
+            updatePlayerScoresUI();
+
+            selectedTiles = [];
+            endTurnBtn.disabled = true;
+
+            socket.emit('endTurn', { roomId: roomInput.value.trim(), currentPlayer: playerNumber === 1 ? 2 : 1 });
+
+            canSelectTiles = false;
+            rollBtn.disabled = true;
+            statusMessage.textContent = `Waiting for Player ${playerNumber === 1 ? 2 : 1}'s turn...`;
+        });
+
+        function updatePlayerScores(player, score) {
+            playerScores[player] = score;
+            updatePlayerScoresUI();
+        }
+
+        function updatePlayerScoresUI() {
+            playerScoresDiv.innerHTML = `Player 1 Score: ${playerScores[1]}<br>Player 2 Score: ${playerScores[2]}`;
+        }
+
+        function updateUI() {
+            rollBtn.disabled = !gameActive || isRolling || playerNumber !== currentPlayer;
+            endTurnBtn.disabled = !canSelectTiles || selectedTiles.length === 0 || playerNumber !== currentPlayer;
+        }
+
+        window.addEventListener('resize', onWindowResize);
+
+        function onTileClick(event) {
+            if (!canSelectTiles || playerNumber !== currentPlayer) return;
+
+            const mouse = new THREE.Vector2();
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(mouse, camera);
+
+            const playerTiles = tiles.filter(tile => tile.userData.player === playerNumber);
+            const intersects = raycaster.intersectObjects(playerTiles);
+
+            if (intersects.length > 0) {
+                const tile = intersects[0].object;
+                if (tile.userData.isShut) return;
+
+                selectTile(tile);
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            world.step(1 / 60);
+
+            for (const dice of diceArray) {
+                dice.mesh.position.copy(dice.body.position);
+                dice.mesh.quaternion.copy(dice.body.quaternion);
+
+                if (dice.body.position.y < -10 ||
+                    Math.abs(dice.body.position.x) > 4 ||
+                    dice.body.position.z < -6 || dice.body.position.z > 6) {
+                    const resetX = (Math.random() * 8) - 4;
+                    const resetZOptions = [-5, 5];
+                    const resetZ = resetZOptions[Math.floor(Math.random() * resetZOptions.length)];
+
+                    dice.body.position.set(resetX, 5, resetZ);
+                    dice.body.velocity.set(0, 0, 0);
+                    dice.body.angularVelocity.set(0, 0, 0);
+                }
+            }
+
+            checkDiceSettled();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

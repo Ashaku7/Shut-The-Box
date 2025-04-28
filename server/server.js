@@ -6,6 +6,8 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
+const roomStates = {};
+
 const io = new Server(server, {
   cors: {
     origin: true,
@@ -36,13 +38,20 @@ io.on('connection', (socket) => {
     socket.emit('assignPlayerNumber', playerNumber);
 
     if (players.size === 2) {
+      // Initialize room state
+      roomStates[roomId] = { currentPlayer: 1, playerScores: {1: 0, 2: 0} };
       io.to(roomId).emit('startGame');
     }
   });
 
   // Handle dice rolling
   socket.on('rollDice', (data) => {
-    io.to(data.roomId).emit('diceRolled', data);
+    const roomState = roomStates[data.roomId];
+    if (!roomState) return;
+    io.to(data.roomId).emit('diceRolled', {
+      diceTotal: data.diceTotal,
+      currentPlayer: roomState.currentPlayer
+    });
   });
 
   // Handle tile shutting
@@ -52,7 +61,11 @@ io.on('connection', (socket) => {
 
   // Handle turn end
   socket.on('endTurn', (data) => {
-    io.to(data.roomId).emit('nextTurn', data);
+    const roomState = roomStates[data.roomId];
+    if (!roomState) return;
+    // Switch current player
+    roomState.currentPlayer = roomState.currentPlayer === 1 ? 2 : 1;
+    io.to(data.roomId).emit('nextTurn', { nextPlayer: roomState.currentPlayer });
   });
 
   socket.on('disconnect', () => {

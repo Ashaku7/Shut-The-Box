@@ -211,14 +211,50 @@ const socket = io('https://shut-the-box-1.onrender.com');
             updateUI();
         });
 
-        socket.on('diceRolled', (data) => {
-            diceTotal = data.diceTotal;
-            currentPlayer = data.currentPlayer;
-            statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
-            canSelectTiles = (playerNumber === currentPlayer);
-            isRolling = false;
-            updateUI();
-        });
+socket.on('diceRolled', (data) => {
+    diceTotal = data.diceTotal;
+    currentPlayer = data.currentPlayer;
+    statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
+    canSelectTiles = (playerNumber === currentPlayer);
+    if (playerNumber === currentPlayer) {
+        // This client rolled the dice, stop rolling animation
+        isRolling = false;
+    } else {
+        // Other client, do not animate dice roll
+        isRolling = false;
+        // Reset dice positions and orientations to show the rolled values
+        if (diceArray.length === 2 && data.diceValues) {
+            for (let i = 0; i < 2; i++) {
+                const dice = diceArray[i];
+                const faceValue = data.diceValues[i];
+                // Set dice orientation to show faceValue on top
+                setDiceOrientation(dice.body, faceValue);
+                dice.body.velocity.set(0, 0, 0);
+                dice.body.angularVelocity.set(0, 0, 0);
+                dice.body.position.set(i * 2 - 1, 1, 0);
+            }
+        }
+    }
+    updateUI();
+});
+
+// Helper function to set dice orientation based on face value
+function setDiceOrientation(body, faceValue) {
+    // Map faceValue to quaternion rotation to show that face on top
+    // This mapping depends on dice model orientation
+    // Approximate rotations for standard dice:
+    const rotations = {
+        1: new THREE.Euler(0, 0, 0),
+        2: new THREE.Euler(-Math.PI / 2, 0, 0),
+        3: new THREE.Euler(0, 0, Math.PI / 2),
+        4: new THREE.Euler(0, 0, -Math.PI / 2),
+        5: new THREE.Euler(Math.PI / 2, 0, 0),
+        6: new THREE.Euler(Math.PI, 0, 0),
+    };
+    const euler = rotations[faceValue] || new THREE.Euler(0, 0, 0);
+    const quat = new CANNON.Quaternion();
+    quat.setFromEuler(euler.x, euler.y, euler.z, 'XYZ');
+    body.quaternion.copy(quat);
 
         socket.on('tileShut', (data) => {
             shutTileByServer(data.tileValue, data.player);
@@ -714,11 +750,7 @@ rollBtn.addEventListener('click', () => {
 
     // Remove socket.emit here; emit after dice settle
 });
-=======
-checkDiceSettled();
-            renderer.render(scene, camera);
-        }
-=======
+
 checkDiceSettled();
             renderer.render(scene, camera);
         }

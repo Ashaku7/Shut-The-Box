@@ -667,53 +667,81 @@ const socket = io('https://shut-the-box-1.onrender.com');
             }
         }
 
-        rollBtn.addEventListener('click', () => {
-            if (!gameActive || isRolling || playerNumber !== currentPlayer) return;
+rollBtn.addEventListener('click', () => {
+    if (!gameActive || isRolling || playerNumber !== currentPlayer) return;
 
-            isRolling = true;
-            rollBtn.disabled = true;
-            statusMessage.textContent = "Rolling...";
-            sumDisplayed = false;
+    isRolling = true;
+    rollBtn.disabled = true;
+    statusMessage.textContent = "Rolling...";
+    sumDisplayed = false;
 
-            currentResult = [0, 0];
+    currentResult = [0, 0];
 
-            const quaternion = new THREE.Quaternion();
+    const quaternion = new THREE.Quaternion();
 
-            diceArray.forEach((d, dIdx) => {
-                d.startPos = [Math.random(), Math.random(), Math.random()];
-                quaternion.setFromEuler(new THREE.Euler(2 * Math.PI * d.startPos[0], 0, 2 * Math.PI * d.startPos[1]));
+    diceArray.forEach((d, dIdx) => {
+        d.startPos = [Math.random(), Math.random(), Math.random()];
+        quaternion.setFromEuler(new THREE.Euler(2 * Math.PI * d.startPos[0], 0, 2 * Math.PI * d.startPos[1]));
 
-                const force = 8 + 4 * d.startPos[2];
+        const force = 8 + 4 * d.startPos[2];
 
-                const diceX = (Math.random() * 8) - 4;
-                const diceY = 6;
-                const diceZPositions = [-5, 5];
+        const diceX = (Math.random() * 8) - 4;
+        const diceY = 6;
+        const diceZPositions = [-5, 5];
 
-                d.body.position = new CANNON.Vec3(diceX, diceY, diceZPositions[dIdx]);
-                d.body.velocity.setZero();
-                d.body.angularVelocity.setZero();
+        d.body.position = new CANNON.Vec3(diceX, diceY, diceZPositions[dIdx]);
+        d.body.velocity.setZero();
+        d.body.angularVelocity.setZero();
 
-                d.body.applyImpulse(
-                    new CANNON.Vec3(
-                        force * (Math.random() - 0.5),
-                        force * 0.7,
-                        force * (Math.random() - 0.5)
-                    ),
-                    new CANNON.Vec3(0, 0, 0)
-                );
+        d.body.applyImpulse(
+            new CANNON.Vec3(
+                force * (Math.random() - 0.5),
+                force * 0.7,
+                force * (Math.random() - 0.5)
+            ),
+            new CANNON.Vec3(0, 0, 0)
+        );
 
-                d.body.angularVelocity.set(
-                    Math.random() * 15 - 7.5,
-                    Math.random() * 15 - 7.5,
-                    Math.random() * 15 - 7.5
-                );
+        d.body.angularVelocity.set(
+            Math.random() * 15 - 7.5,
+            Math.random() * 15 - 7.5,
+            Math.random() * 15 - 7.5
+        );
 
-                d.body.quaternion.copy(quaternion);
-                d.body.allowSleep = true;
-            });
+        d.body.quaternion.copy(quaternion);
+        d.body.allowSleep = true;
+    });
 
-            socket.emit('rollDice', { roomId: roomInput.value.trim(), diceTotal: null, player: playerNumber });
-        });
+    // Remove socket.emit here; emit after dice settle
+});
+=======
+checkDiceSettled();
+            renderer.render(scene, camera);
+        }
+=======
+checkDiceSettled();
+            renderer.render(scene, camera);
+        }
+
+        // Emit rollDice event with diceTotal after dice settle
+        if (!isRolling) return;
+
+        let allSettled = true;
+        for (let i = 0; i < diceArray.length; i++) {
+            const dice = diceArray[i];
+            const velocity = dice.body.velocity.length();
+            const angularVelocity = dice.body.angularVelocity.length();
+
+            if (velocity > 0.1 || angularVelocity > 0.1) {
+                allSettled = false;
+                break;
+            }
+        }
+
+        if (allSettled) {
+            const sum = currentResult.reduce((a, v) => a + v, 0);
+            socket.emit('rollDice', { roomId: roomInput.value.trim(), diceTotal: sum, currentPlayer: playerNumber });
+        }
 
         function shutTileByServer(tileValue, player) {
             const tile = tiles.find(t => t.userData.value === tileValue && !t.userData.isShut);

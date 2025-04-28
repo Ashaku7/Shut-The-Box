@@ -27,7 +27,14 @@ io.on('connection', (socket) => {
     socket.join(roomId);
     console.log(`Player ${socket.id} joined room: ${roomId}`);
 
+    // Assign player number based on current players in the room
     const players = io.sockets.adapter.rooms.get(roomId);
+    let playerNumber = 1;
+    if (players) {
+      playerNumber = players.size; // 1 or 2
+    }
+    socket.emit('assignPlayerNumber', playerNumber);
+
     if (players.size === 2) {
       io.to(roomId).emit('startGame');
     }

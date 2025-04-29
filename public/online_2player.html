@@ -339,6 +339,9 @@ function setDiceOrientation(body, faceValue) {
 
         // Initialize the game
         function init() {
+            console.log('init() called');
+            console.log('Window size:', window.innerWidth, window.innerHeight);
+
             scene = new THREE.Scene();
             scene.background = null;
 
@@ -348,7 +351,7 @@ function setDiceOrientation(body, faceValue) {
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setClearColor(0x000000, 0);
+            renderer.setClearColor(0x222222, 1); // Set visible background color for debugging
             renderer.shadowMap.enabled = true;
             document.getElementById('game-container').appendChild(renderer.domElement);
 
@@ -400,6 +403,7 @@ function setDiceOrientation(body, faceValue) {
             window.addEventListener('resize', onWindowResize);
             renderer.domElement.addEventListener('click', onTileClick);
 
+            // Temporarily hide loadingDiv at start for debugging
             loadingDiv.style.display = 'none';
         }
 
@@ -937,6 +941,7 @@ rollBtn.addEventListener('click', () => {
         }
 
         function animate() {
+            console.log('animate() called');
             requestAnimationFrame(animate);
             world.step(1 / 60);
 

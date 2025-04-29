@@ -879,8 +879,6 @@ rollBtn.addEventListener('click', () => {
             endTurnBtn.disabled = !canSelectTiles || selectedTiles.length === 0 || playerNumber !== currentPlayer;
         }
 
-        window.addEventListener('resize', onWindowResize);
-
         function onTileClick(event) {
             if (!canSelectTiles || playerNumber !== currentPlayer) return;
 

@@ -407,11 +407,17 @@ function setDiceOrientation(body, faceValue) {
             window.addEventListener('resize', onWindowResize);
             renderer.domElement.addEventListener('click', onTileClick);
 
-            // Temporarily hide loadingDiv at start for debugging
-            loadingDiv.style.display = 'none';
+            // Hide loadingDiv only after dice are loaded
+            if (diceLoaded) {
+                loadingDiv.style.display = 'none';
+                console.log('Loading complete, hiding loadingDiv');
+            } else {
+                console.log('Dice not loaded yet');
+            }
         }
 
         function initDice() {
+            console.log('initDice() called');
             diceMesh = createDiceMesh();
 
             for (let i = 0; i < 2; i++) {
@@ -419,6 +425,8 @@ function setDiceOrientation(body, faceValue) {
             }
 
             diceLoaded = true;
+            loadingDiv.style.display = 'none';
+            console.log('Dice created, loadingDiv hidden');
         }
 
         function createDiceMesh() {

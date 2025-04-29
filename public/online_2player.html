@@ -772,27 +772,28 @@ rollBtn.addEventListener('click', () => {
 });
 
             checkDiceSettled();
-            renderer.render(scene, camera);
-        }
 
-        // Emit rollDice event with diceTotal after dice settle
-        if (!isRolling) return;
+            // Emit rollDice event with diceTotal after dice settle
+            if (isRolling) {
+                let allSettled = true;
+                for (let i = 0; i < diceArray.length; i++) {
+                    const dice = diceArray[i];
+                    const velocity = dice.body.velocity.length();
+                    const angularVelocity = dice.body.angularVelocity.length();
 
-        let allSettled = true;
-        for (let i = 0; i < diceArray.length; i++) {
-            const dice = diceArray[i];
-            const velocity = dice.body.velocity.length();
-            const angularVelocity = dice.body.angularVelocity.length();
+                    if (velocity > 0.1 || angularVelocity > 0.1) {
+                        allSettled = false;
+                        break;
+                    }
+                }
 
-            if (velocity > 0.1 || angularVelocity > 0.1) {
-                allSettled = false;
-                break;
+                if (allSettled) {
+                    const sum = currentResult.reduce((a, v) => a + v, 0);
+                    socket.emit('rollDice', { roomId: roomInput.value.trim(), diceTotal: sum, currentPlayer: playerNumber });
+                }
             }
-        }
 
-        if (allSettled) {
-            const sum = currentResult.reduce((a, v) => a + v, 0);
-            socket.emit('rollDice', { roomId: roomInput.value.trim(), diceTotal: sum, currentPlayer: playerNumber });
+            renderer.render(scene, camera);
         }
 
         function shutTileByServer(tileValue, player) {

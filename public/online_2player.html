@@ -129,6 +129,8 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
 
     <script>
+console.log("Script loaded");
+
 const socket = io('https://shut-the-box-1.onrender.com');
 
 socket.on('connect_error', (error) => {
@@ -334,8 +336,10 @@ function setDiceOrientation(body, faceValue) {
         });
 
         // Initialize game
-        init();
-        animate();
+        window.addEventListener('DOMContentLoaded', () => {
+            init();
+            animate();
+        });
 
         // Initialize the game
         function init() {

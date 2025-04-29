@@ -50,5 +50,9 @@ The "Play vs Bot" mode is planned but currently under development. Selecting thi
 Enjoy playing Shut the Box!
 
 ## current progress
-.need to deploy the backend server and connect it to the frontend sever through vercel.
 .improve the ui design and add more features like sound effects and animations.
+.fix the problem of loading 3d components in the online mode.
+.need to verify if the actions done by one player is seen by the other player.
+.need to fix the sum calculation and dice rolling logic in online mode.
+.improve the ui design of every page.
+.finally add a chat box in multiplayer game.

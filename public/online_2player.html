@@ -421,7 +421,9 @@ function setDiceOrientation(body, faceValue) {
             diceMesh = createDiceMesh();
 
             for (let i = 0; i < 2; i++) {
-                diceArray.push(createDice());
+                const dice = createDice();
+                console.log('Created dice', i, dice);
+                diceArray.push(dice);
             }
 
             diceLoaded = true;
@@ -530,6 +532,7 @@ function setDiceOrientation(body, faceValue) {
         }
 
         function createDice() {
+            console.log('createDice() called');
             const mesh = diceMesh.clone();
             scene.add(mesh);
 

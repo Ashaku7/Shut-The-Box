@@ -336,6 +336,13 @@ function setDiceOrientation(body, faceValue) {
         });
 
         // Initialize game
+        console.log('Calling init and animate directly');
+        init();
+        animate();
+
+        /*
+        // For testing, call init and animate directly if DOMContentLoaded does not fire
+        // Comment out the above event listener and uncomment below lines to test
         console.log('Registering DOMContentLoaded event listener');
         window.addEventListener('DOMContentLoaded', () => {
             console.log('DOMContentLoaded event fired');
@@ -343,13 +350,6 @@ function setDiceOrientation(body, faceValue) {
             animate();
         });
         console.log('DOMContentLoaded event listener registered');
-
-        // For testing, call init and animate directly if DOMContentLoaded does not fire
-        // Comment out the above event listener and uncomment below lines to test
-        /*
-        console.log('Calling init and animate directly');
-        init();
-        animate();
         */
 
         // Initialize the game

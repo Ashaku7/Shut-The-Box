@@ -369,9 +369,6 @@
             // loadingDiv.style.display = 'none';
         }
 
-        init();
-        animate();
-
         // Initialize 3D dice
         function initDice() {
             diceMesh = createDiceMesh();
@@ -382,6 +379,9 @@
 
             diceLoaded = true;
         }
+
+        init();
+        animate();
 
         // Create dice mesh
         function createDiceMesh() {

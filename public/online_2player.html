@@ -292,8 +292,6 @@
         });
 
         // Initialize the game
-        init();
-        animate();
 
         // Initialize the game
         function init() {
@@ -370,6 +368,9 @@
             // Removed hiding loading screen here to keep it visible until player joins server
             // loadingDiv.style.display = 'none';
         }
+
+        init();
+        animate();
 
         // Initialize 3D dice
         function initDice() {

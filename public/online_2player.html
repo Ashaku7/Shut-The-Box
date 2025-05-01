@@ -226,28 +226,14 @@
             updateUI();
         });
 
-        socket.on('diceRolled', (data) => {
-            diceTotal = data.diceTotal;
-            currentPlayer = data.currentPlayer;
-            statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
-            canSelectTiles = (playerNumber === currentPlayer);
-            if (playerNumber === currentPlayer) {
-                isRolling = false;
-            } else {
-                isRolling = false;
-                if (diceArray.length === 2 && data.diceValues) {
-                    for (let i = 0; i < 2; i++) {
-                        const dice = diceArray[i];
-                        const faceValue = data.diceValues[i];
-                        setDiceOrientation(dice.body, faceValue);
-                        dice.body.velocity.set(0, 0, 0);
-                        dice.body.angularVelocity.set(0, 0, 0);
-                        dice.body.position.set(i * 2 - 1, 1, 0);
-                    }
-                }
-            }
-            updateUI();
-        });
+socket.on('diceRolled', (data) => {
+    diceTotal = data.diceTotal;
+    currentPlayer = data.currentPlayer;
+    statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
+    canSelectTiles = (playerNumber === currentPlayer);
+    isRolling = false;
+    updateUI();
+});
 
         socket.on('tileShut', (data) => {
             shutTileByServer(data.tileValue, data.player);
@@ -680,50 +666,53 @@
             }
         });
 
-        function checkDiceSettled() {
-            if (!isRolling) return;
+function checkDiceSettled() {
+    if (!isRolling) return;
 
-            let allSettled = true;
-            for (let i = 0; i < diceArray.length; i++) {
-                const dice = diceArray[i];
-                const velocity = dice.body.velocity.length();
-                const angularVelocity = dice.body.angularVelocity.length();
+    let allSettled = true;
+    for (let i = 0; i < diceArray.length; i++) {
+        const dice = diceArray[i];
+        const velocity = dice.body.velocity.length();
+        const angularVelocity = dice.body.angularVelocity.length();
 
-                if (velocity > 0.1 || angularVelocity > 0.1) {
-                    allSettled = false;
-                    break;
-                }
-            }
+        if (velocity > 0.1 || angularVelocity > 0.1) {
+            allSettled = false;
+            break;
+        }
+    }
 
-            if (allSettled) {
-                if (rollTimeoutId) {
-                    clearTimeout(rollTimeoutId);
-                    rollTimeoutId = null;
-                }
+    if (allSettled) {
+        if (rollTimeoutId) {
+            clearTimeout(rollTimeoutId);
+            rollTimeoutId = null;
+        }
 
-                for (let i = 0; i < diceArray.length; i++) {
-                    const dice = diceArray[i];
-                    const faceValue = getDiceFaceValue(dice.body.quaternion);
-                    if (faceValue) {
-                        currentResult[i] = faceValue;
-                    } else {
-                        return;
-                    }
-                }
-
-                if (!sumDisplayed && currentResult[0] !== 0 && currentResult[1] !== 0) {
-                    const sum = currentResult.reduce((a, v) => a + v, 0);
-                    diceTotal = sum;
-                    statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
-                    sumDisplay.textContent = `You have rolled ${diceTotal}`;
-                    sumDisplay.style.display = 'block';
-                    isRolling = false;
-                    canSelectTiles = (playerNumber === currentPlayer);
-                    rollBtn.disabled = !canSelectTiles;
-                    sumDisplayed = true;
-                }
+        for (let i = 0; i < diceArray.length; i++) {
+            const dice = diceArray[i];
+            const faceValue = getDiceFaceValue(dice.body.quaternion);
+            if (faceValue) {
+                currentResult[i] = faceValue;
+            } else {
+                return;
             }
         }
+
+        if (!sumDisplayed && currentResult[0] !== 0 && currentResult[1] !== 0) {
+            const sum = currentResult.reduce((a, v) => a + v, 0);
+            diceTotal = sum;
+            statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
+            sumDisplay.textContent = `You have rolled ${diceTotal}`;
+            sumDisplay.style.display = 'block';
+            isRolling = false;
+            canSelectTiles = (playerNumber === currentPlayer);
+            rollBtn.disabled = !canSelectTiles;
+            sumDisplayed = true;
+
+            // Emit diceRolled event with diceTotal and currentPlayer
+            socket.emit('diceRolled', { roomId: roomInput.value.trim(), diceTotal: sum, currentPlayer });
+        }
+    }
+}
 
 rollBtn.addEventListener('click', () => {
     if (!gameActive || isRolling || playerNumber !== currentPlayer) return;
@@ -735,13 +724,23 @@ rollBtn.addEventListener('click', () => {
 
     currentResult = [0, 0];
 
+    // Generate dice roll parameters to send to server
+    const diceRollParams = [];
+
     const quaternion = new THREE.Quaternion();
 
     diceArray.forEach((d, dIdx) => {
-        d.startPos = [Math.random(), Math.random(), Math.random()];
-        quaternion.setFromEuler(new THREE.Euler(2 * Math.PI * d.startPos[0], 0, 2 * Math.PI * d.startPos[1]));
+        // Generate random seeds for dice roll
+        const seedX = Math.random();
+        const seedY = Math.random();
+        const seedZ = Math.random();
 
-        const force = 8 + 4 * d.startPos[2];
+        diceRollParams.push({ seedX, seedY, seedZ });
+
+        d.startPos = [seedX, seedY, seedZ];
+        quaternion.setFromEuler(new THREE.Euler(2 * Math.PI * seedX, 0, 2 * Math.PI * seedY));
+
+        const force = 8 + 4 * seedZ;
 
         const diceX = (Math.random() * 8) - 4;
         const diceY = 6;
@@ -770,7 +769,54 @@ rollBtn.addEventListener('click', () => {
         d.body.allowSleep = true;
     });
 
-    // Remove socket.emit here; emit after dice settle
+    // Emit startRoll event with dice roll parameters to server
+    socket.emit('startRoll', { roomId: roomInput.value.trim(), diceRollParams, currentPlayer: playerNumber });
+});
+
+socket.on('startRoll', (data) => {
+    if (!data.diceRollParams || data.diceRollParams.length !== 2) return;
+
+    isRolling = true;
+    rollBtn.disabled = true;
+    sumDisplayed = false;
+    statusMessage.textContent = `Player ${data.currentPlayer} is rolling...`;
+
+    const quaternion = new THREE.Quaternion();
+
+    diceArray.forEach((d, dIdx) => {
+        const { seedX, seedY, seedZ } = data.diceRollParams[dIdx];
+
+        d.startPos = [seedX, seedY, seedZ];
+        quaternion.setFromEuler(new THREE.Euler(2 * Math.PI * seedX, 0, 2 * Math.PI * seedY));
+
+        const force = 8 + 4 * seedZ;
+
+        const diceX = (Math.random() * 8) - 4;
+        const diceY = 6;
+        const diceZPositions = [-5, 5];
+
+        d.body.position = new CANNON.Vec3(diceX, diceY, diceZPositions[dIdx]);
+        d.body.velocity.setZero();
+        d.body.angularVelocity.setZero();
+
+        d.body.applyImpulse(
+            new CANNON.Vec3(
+                force * (Math.random() - 0.5),
+                force * 0.7,
+                force * (Math.random() - 0.5)
+            ),
+            new CANNON.Vec3(0, 0, 0)
+        );
+
+        d.body.angularVelocity.set(
+            Math.random() * 15 - 7.5,
+            Math.random() * 15 - 7.5,
+            Math.random() * 15 - 7.5
+        );
+
+        d.body.quaternion.copy(quaternion);
+        d.body.allowSleep = true;
+    });
 });
 
             checkDiceSettled();

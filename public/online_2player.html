@@ -236,12 +236,21 @@ function canShutTilesForRoll(player, roll) {
 
 function canSumToTarget(numbers, target) {
     // Backtracking to check if any subset sums to target
+    // Added memoization to improve performance and correctness
+    const memo = new Map();
+
     function backtrack(start, sum) {
+        const key = `${start},${sum}`;
+        if (memo.has(key)) return memo.get(key);
         if (sum === target) return true;
         if (sum > target) return false;
         for (let i = start; i < numbers.length; i++) {
-            if (backtrack(i + 1, sum + numbers[i])) return true;
+            if (backtrack(i + 1, sum + numbers[i])) {
+                memo.set(key, true);
+                return true;
+            }
         }
+        memo.set(key, false);
         return false;
     }
     return backtrack(0, 0);
@@ -255,7 +264,11 @@ socket.on('diceRolled', (data) => {
     diceTotal = data.diceTotal;
     currentPlayer = data.currentPlayer;
 
-    if (!canShutTilesForRoll(currentPlayer, diceTotal)) {
+    // Use the new helper function to get available tiles and check if can shut
+    const availableTiles = getAvailableTilesForPlayer(currentPlayer);
+    const canShut = canSumToTarget(availableTiles, diceTotal);
+
+    if (!canShut) {
         consecutiveFailedTurns++;
         if (consecutiveFailedTurns >= 2) {
             // Game over due to two consecutive failed turns
@@ -926,6 +939,20 @@ function shutTileByServer(tileValue, player) {
     }
     animate();
 }
+
+// Added helper function to get available tiles for a player
+function getAvailableTilesForPlayer(player) {
+    return tiles.filter(t => t.userData.player === player && !t.userData.isShut).map(t => t.userData.value);
+}
+
+// Added helper function to log available tiles and canSumToTarget result (commented out for easy revert)
+// function logAvailableTilesAndCheck(player, roll) {
+//     const availableTiles = getAvailableTilesForPlayer(player);
+//     console.log(`Player ${player} available tiles:`, availableTiles);
+//     const canShut = canSumToTarget(availableTiles, roll);
+//     console.log(`Can shut tiles for roll ${roll}:`, canShut);
+//     return canShut;
+// }
 
         function selectTile(tile) {
             const tileValue = tile.userData.value;

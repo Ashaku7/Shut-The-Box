@@ -226,9 +226,56 @@
             updateUI();
         });
 
+let consecutiveFailedTurns = 0;
+
+function canShutTilesForRoll(player, roll) {
+    // Check if any combination of available tiles for player sums to roll
+    const availableTiles = tiles.filter(t => t.userData.player === player && !t.userData.isShut).map(t => t.userData.value);
+    return canSumToTarget(availableTiles, roll);
+}
+
+function canSumToTarget(numbers, target) {
+    // Backtracking to check if any subset sums to target
+    function backtrack(start, sum) {
+        if (sum === target) return true;
+        if (sum > target) return false;
+        for (let i = start; i < numbers.length; i++) {
+            if (backtrack(i + 1, sum + numbers[i])) return true;
+        }
+        return false;
+    }
+    return backtrack(0, 0);
+}
+
+function checkAllTilesShut(player) {
+    return tiles.filter(t => t.userData.player === player && !t.userData.isShut).length === 0;
+}
+
 socket.on('diceRolled', (data) => {
     diceTotal = data.diceTotal;
     currentPlayer = data.currentPlayer;
+
+    if (!canShutTilesForRoll(currentPlayer, diceTotal)) {
+        consecutiveFailedTurns++;
+        if (consecutiveFailedTurns >= 2) {
+            // Game over due to two consecutive failed turns
+            statusMessage.textContent = `No moves possible for two consecutive turns. Game over.`;
+            gameActive = false;
+            rollBtn.disabled = true;
+            endTurnBtn.disabled = true;
+            newGameBtn.style.display = 'block';
+            socket.emit('gameOver', { roomId: roomInput.value.trim(), message: 'Game over: No moves possible for two consecutive turns.' });
+            return;
+        } else {
+            // Pass turn to next player
+            statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal} but cannot shut any tiles. Passing turn to next player.`;
+            socket.emit('endTurn', { roomId: roomInput.value.trim(), currentPlayer: currentPlayer === 1 ? 2 : 1 });
+            return;
+        }
+    } else {
+        consecutiveFailedTurns = 0;
+    }
+
     statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
     canSelectTiles = (playerNumber === currentPlayer);
     isRolling = false;

@@ -844,26 +844,26 @@ socket.on('startRoll', (data) => {
             renderer.render(scene, camera);
         
 
-        function shutTileByServer(tileValue, player) {
-            const tile = tiles.find(t => t.userData.value === tileValue && !t.userData.isShut);
-            if (!tile) return;
-            tile.userData.isShut = true;
-            tile.userData.shutBy = player;
-            tile.material.color.set(player === 1 ? 0x4CAF50 : 0x2196F3);
-            const duration = 500;
-            const startTime = Date.now();
-            function animate() {
-                const elapsed = Date.now() - startTime;
-                const progress = Math.min(elapsed / duration, 1);
-                tile.rotation.x = progress * Math.PI;
-                if (progress < 1) {
-                    requestAnimationFrame(animate);
-                } else {
-                    tile.rotation.x = Math.PI;
-                }
-            }
-            animate();
+function shutTileByServer(tileValue, player) {
+    const tile = tiles.find(t => t.userData.value === tileValue && t.userData.player === player && !t.userData.isShut);
+    if (!tile) return;
+    tile.userData.isShut = true;
+    tile.userData.shutBy = player;
+    tile.material.color.set(player === 1 ? 0x4CAF50 : 0x2196F3);
+    const duration = 500;
+    const startTime = Date.now();
+    function animate() {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        tile.rotation.x = progress * Math.PI;
+        if (progress < 1) {
+            requestAnimationFrame(animate);
+        } else {
+            tile.rotation.x = Math.PI;
         }
+    }
+    animate();
+}
 
         function selectTile(tile) {
             const tileValue = tile.userData.value;

@@ -20,6 +20,37 @@ app.use(express.static(path.join(__dirname, '../dist')));
 
 const PORT = process.env.PORT || 3000;
 
+// Helper function to check if all tiles 1-9 are shut
+function allTilesShut(shutTiles) {
+  for (let i = 1; i <= 9; i++) {
+    if (!shutTiles.has(i)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Helper function to check if any combination of available tiles sums to target
+function canSumToTarget(numbers, target) {
+  const memo = new Map();
+
+  function backtrack(start, sum) {
+    const key = `${start},${sum}`;
+    if (memo.has(key)) return memo.get(key);
+    if (sum === target) return true;
+    if (sum > target) return false;
+    for (let i = start; i < numbers.length; i++) {
+      if (backtrack(i + 1, sum + numbers[i])) {
+        memo.set(key, true);
+        return true;
+      }
+    }
+    memo.set(key, false);
+    return false;
+  }
+  return backtrack(0, 0);
+}
+
 // Room management
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
@@ -38,8 +69,12 @@ io.on('connection', (socket) => {
     socket.emit('assignPlayerNumber', playerNumber);
 
     if (players.size === 2) {
-      // Initialize room state
-      roomStates[roomId] = { currentPlayer: 1, playerScores: {1: 0, 2: 0} };
+      // Initialize room state with tile shut sets
+      roomStates[roomId] = {
+        currentPlayer: 1,
+        playerScores: { 1: 0, 2: 0 },
+        shutTiles: { 1: new Set(), 2: new Set() }
+      };
       io.to(roomId).emit('startGame');
     }
   });
@@ -48,15 +83,57 @@ io.on('connection', (socket) => {
   socket.on('rollDice', (data) => {
     const roomState = roomStates[data.roomId];
     if (!roomState) return;
+
+    const currentPlayer = roomState.currentPlayer;
+    const shutTilesSet = roomState.shutTiles[currentPlayer];
+    // Get available tiles for current player
+    const availableTiles = [];
+    for (let i = 1; i <= 9; i++) {
+      if (!shutTilesSet.has(i)) {
+        availableTiles.push(i);
+      }
+    }
+
+    // Check if player can shut tiles for the roll
+    if (!canSumToTarget(availableTiles, data.diceTotal)) {
+      // Pass turn to next player
+      roomState.currentPlayer = currentPlayer === 1 ? 2 : 1;
+      io.to(data.roomId).emit('nextTurn', { nextPlayer: roomState.currentPlayer });
+      return;
+    }
+
     io.to(data.roomId).emit('diceRolled', {
       diceTotal: data.diceTotal,
-      currentPlayer: roomState.currentPlayer
+      currentPlayer: currentPlayer
     });
   });
 
   // Handle tile shutting
   socket.on('shutTile', (data) => {
+    const roomState = roomStates[data.roomId];
+    if (!roomState) return;
+
+    const player = data.player;
+    const tileValue = data.tileValue;
+
+    // Update shut tiles set
+    if (!roomState.shutTiles[player]) {
+      roomState.shutTiles[player] = new Set();
+    }
+    roomState.shutTiles[player].add(tileValue);
+
+    // Update player score
+    if (!roomState.playerScores[player]) {
+      roomState.playerScores[player] = 0;
+    }
+    roomState.playerScores[player] += tileValue;
+
     io.to(data.roomId).emit('tileShut', data);
+
+    // Check if player has shut all tiles
+    if (allTilesShut(roomState.shutTiles[player])) {
+      io.to(data.roomId).emit('gameOver', { message: `Player ${player} has shut all tiles and wins!` });
+    }
   });
 
   // Handle turn end

@@ -970,8 +970,24 @@ function getAvailableTilesForPlayer(player) {
             const currentSum = selectedTiles.reduce((sum, val) => sum + val, 0);
 
             if (currentSum === diceTotal) {
-                endTurnBtn.disabled = false;
-                statusMessage.textContent = `Selected tiles sum to ${diceTotal}. End your turn to shut them.`;
+                // Automatically shut tiles and end turn without requiring button click
+                selectedTiles.forEach(tileValue => {
+                    socket.emit('shutTile', { roomId: roomInput.value.trim(), player: playerNumber, tileValue });
+                });
+
+                const turnScore = selectedTiles.reduce((sum, val) => sum + val, 0);
+                playerScores[playerNumber] += turnScore;
+                updatePlayerScoresUI();
+
+                selectedTiles = [];
+                endTurnBtn.disabled = true;
+
+                // Emit endTurn event with currentPlayer to server to switch turn
+                socket.emit('endTurn', { roomId: roomInput.value.trim(), currentPlayer: playerNumber });
+
+                canSelectTiles = false;
+                rollBtn.disabled = true;
+                statusMessage.textContent = `Waiting for Player ${playerNumber === 1 ? 2 : 1}'s turn...`;
             } else if (currentSum > diceTotal) {
                 statusMessage.textContent = `Sum exceeds ${diceTotal}! Deselect some tiles.`;
                 endTurnBtn.disabled = true;
@@ -981,26 +997,8 @@ function getAvailableTilesForPlayer(player) {
             }
         }
 
-        endTurnBtn.addEventListener('click', () => {
-            if (selectedTiles.length === 0 || playerNumber !== currentPlayer) return;
-
-            selectedTiles.forEach(tileValue => {
-                socket.emit('shutTile', { roomId: roomInput.value.trim(), player: playerNumber, tileValue });
-            });
-
-            const turnScore = selectedTiles.reduce((sum, val) => sum + val, 0);
-            playerScores[playerNumber] += turnScore;
-            updatePlayerScoresUI();
-
-            selectedTiles = [];
-            endTurnBtn.disabled = true;
-
-            socket.emit('endTurn', { roomId: roomInput.value.trim(), currentPlayer: playerNumber === 1 ? 2 : 1 });
-
-            canSelectTiles = false;
-            rollBtn.disabled = true;
-            statusMessage.textContent = `Waiting for Player ${playerNumber === 1 ? 2 : 1}'s turn...`;
-        });
+        // Remove endTurnBtn click listener since turn ends automatically
+        endTurnBtn.style.display = 'none';
 
 function updatePlayerScores(player, score) {
     // This function can be kept if server sends scores, but we will recalc scores locally

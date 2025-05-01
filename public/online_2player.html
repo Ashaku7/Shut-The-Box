@@ -913,14 +913,28 @@ function shutTileByServer(tileValue, player) {
             statusMessage.textContent = `Waiting for Player ${playerNumber === 1 ? 2 : 1}'s turn...`;
         });
 
-        function updatePlayerScores(player, score) {
-            playerScores[player] = score;
-            updatePlayerScoresUI();
-        }
+function updatePlayerScores(player, score) {
+    // This function can be kept if server sends scores, but we will recalc scores locally
+    updatePlayerScoresUI();
+}
 
-        function updatePlayerScoresUI() {
-            playerScoresDiv.innerHTML = `Player 1 Score: ${playerScores[1]}<br>Player 2 Score: ${playerScores[2]}`;
+function updatePlayerScoresUI() {
+    // Calculate scores as sum of all tiles shut by each player
+    let score1 = 0;
+    let score2 = 0;
+    for (const tile of tiles) {
+        if (tile.userData.isShut) {
+            if (tile.userData.shutBy === 1) {
+                score1 += tile.userData.value;
+            } else if (tile.userData.shutBy === 2) {
+                score2 += tile.userData.value;
+            }
         }
+    }
+    playerScores[1] = score1;
+    playerScores[2] = score2;
+    playerScoresDiv.innerHTML = `Player 1 Score: ${score1}<br>Player 2 Score: ${score2}`;
+}
 
         function updateUI() {
             rollBtn.disabled = !gameActive || isRolling || playerNumber !== currentPlayer;

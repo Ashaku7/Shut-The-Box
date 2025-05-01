@@ -704,14 +704,29 @@ socket.on('diceRolled', (data) => {
             return faceValue;
         }
 
-        let rollTimeoutId = null;
+let rollTimeoutId = null;
+let rollStartTime = null;
+let rollTimerInterval = null;
 
-        retryRollBtn.addEventListener('click', () => {
-            retryRollBtn.style.display = 'none';
-            if (gameActive && playerNumber === currentPlayer) {
-                socket.emit('rollDice', { roomId: roomInput.value.trim() });
-            }
-        });
+function startRollTimer() {
+    rollStartTime = Date.now();
+    retryRollBtn.style.display = 'none';
+    rollTimerInterval = setInterval(() => {
+        const elapsed = Date.now() - rollStartTime;
+        if (elapsed > 10000 && isRolling) { // 10 seconds
+            retryRollBtn.style.display = 'block';
+            clearInterval(rollTimerInterval);
+        }
+    }, 500);
+}
+
+retryRollBtn.addEventListener('click', () => {
+    retryRollBtn.style.display = 'none';
+    if (gameActive && playerNumber === currentPlayer) {
+        socket.emit('rollDice', { roomId: roomInput.value.trim() });
+        startRollTimer();
+    }
+});
 
 function checkDiceSettled() {
     if (!isRolling) return;

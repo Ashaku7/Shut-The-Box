@@ -305,6 +305,8 @@ socket.on('diceRolled', (data) => {
             selectedTiles = [];
             canSelectTiles = (playerNumber === currentPlayer);
             statusMessage.textContent = `Player ${currentPlayer}'s turn. Roll the dice.`;
+            isRolling = false;
+            rollBtn.disabled = !canSelectTiles;
             updateUI();
         });
 

@@ -81,8 +81,12 @@ io.on('connection', (socket) => {
 
   // Handle dice rolling
   socket.on('rollDice', (data) => {
+    console.log('Received rollDice event:', data);
     const roomState = roomStates[data.roomId];
-    if (!roomState) return;
+    if (!roomState) {
+      console.log('No room state found for roomId:', data.roomId);
+      return;
+    }
 
     const currentPlayer = roomState.currentPlayer;
     const shutTilesSet = roomState.shutTiles[currentPlayer];
@@ -98,6 +102,7 @@ io.on('connection', (socket) => {
     if (!canSumToTarget(availableTiles, data.diceTotal)) {
       // Pass turn to next player
       roomState.currentPlayer = currentPlayer === 1 ? 2 : 1;
+      console.log('No moves possible, switching turn to player:', roomState.currentPlayer);
       io.to(data.roomId).emit('nextTurn', { nextPlayer: roomState.currentPlayer });
       return;
     }
@@ -110,8 +115,12 @@ io.on('connection', (socket) => {
 
   // Handle tile shutting
   socket.on('shutTile', (data) => {
+    console.log('Received shutTile event:', data);
     const roomState = roomStates[data.roomId];
-    if (!roomState) return;
+    if (!roomState) {
+      console.log('No room state found for roomId:', data.roomId);
+      return;
+    }
 
     const player = data.player;
     const tileValue = data.tileValue;
@@ -138,10 +147,15 @@ io.on('connection', (socket) => {
 
   // Handle turn end
   socket.on('endTurn', (data) => {
+    console.log('Received endTurn event:', data);
     const roomState = roomStates[data.roomId];
-    if (!roomState) return;
+    if (!roomState) {
+      console.log('No room state found for roomId:', data.roomId);
+      return;
+    }
     // Switch current player
     roomState.currentPlayer = roomState.currentPlayer === 1 ? 2 : 1;
+    console.log('Switching turn to player:', roomState.currentPlayer);
     io.to(data.roomId).emit('nextTurn', { nextPlayer: roomState.currentPlayer });
   });
 

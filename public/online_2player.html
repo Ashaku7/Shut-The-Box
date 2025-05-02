@@ -282,7 +282,7 @@ socket.on('diceRolled', (data) => {
         } else {
             // Pass turn to next player
             statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal} but cannot shut any tiles. Passing turn to next player.`;
-            socket.emit('endTurn', { roomId: roomInput.value.trim(), currentPlayer: currentPlayer === 1 ? 2 : 1 });
+            socket.emit('endTurn', { roomId: roomInput.value.trim(), currentPlayer: currentPlayer });
             return;
         }
     } else {

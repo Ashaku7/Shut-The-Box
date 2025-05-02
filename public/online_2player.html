@@ -208,6 +208,41 @@
             loadingDiv.style.display = 'none';
         });
 
+        socket.on('disconnect', () => {
+            console.log('Disconnected from server');
+            statusMessage.textContent = 'Disconnected from server.';
+        });
+
+        socket.on('assignPlayerNumber', (num) => {
+            console.log('Assigned player number:', num);
+            playerNumber = num;
+            statusMessage.textContent = `You are Player ${playerNumber}. Waiting for other player...`;
+        });
+
+        socket.on('startGame', () => {
+            console.log('Received startGame event');
+            gameActive = true;
+            currentPlayer = 1;
+            statusMessage.textContent = `Game started! Player ${currentPlayer}'s turn.`;
+            uiContainer.style.display = 'flex';
+            updatePlayerScoresUI();
+            updateUI();
+        });
+
+        joinRoomBtn.addEventListener('click', () => {
+            const inputRoomId = roomInput.value.trim();
+            console.log('Join room button clicked with room ID:', inputRoomId);
+            if (!inputRoomId) {
+                alert('Please enter a room ID.');
+                return;
+            }
+            socket.emit('joinRoom', inputRoomId);
+            roomInput.disabled = true;
+            joinRoomBtn.disabled = true;
+            statusMessage.textContent = `Joined room ${inputRoomId}. Waiting for other player...`;
+            loadingDiv.style.display = 'none';
+        });
+
         socket.on('assignPlayerNumber', (num) => {
             console.log('Assigned player number:', num);
             playerNumber = num;
@@ -282,6 +317,7 @@ socket.on('diceRolled', (data) => {
         } else {
             // Pass turn to next player
             statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal} but cannot shut any tiles. Passing turn to next player.`;
+            console.log('Emitting endTurn event with currentPlayer:', currentPlayer);
             socket.emit('endTurn', { roomId: roomInput.value.trim(), currentPlayer: currentPlayer });
             return;
         }
@@ -301,6 +337,7 @@ socket.on('diceRolled', (data) => {
         });
 
         socket.on('nextTurn', (data) => {
+            console.log('Received nextTurn event:', data);
             currentPlayer = data.nextPlayer;
             selectedTiles = [];
             canSelectTiles = (playerNumber === currentPlayer);
@@ -984,8 +1021,9 @@ function getAvailableTilesForPlayer(player) {
                 selectedTiles = [];
                 endTurnBtn.disabled = true;
 
-                // Emit endTurn event with currentPlayer to server to switch turn
-                socket.emit('endTurn', { roomId: roomInput.value.trim(), currentPlayer: playerNumber });
+            // Emit endTurn event with currentPlayer to server to switch turn
+            console.log('Emitting endTurn event with currentPlayer:', playerNumber);
+            socket.emit('endTurn', { roomId: roomInput.value.trim(), currentPlayer: playerNumber });
 
                 canSelectTiles = false;
                 rollBtn.disabled = true;

@@ -239,7 +239,7 @@
             socket.emit('joinRoom', inputRoomId);
             roomInput.disabled = true;
             joinRoomBtn.disabled = true;
-            statusMessage.textContent = `Joined room ${inputRoomId}. Waiting for other player...`;
+            statusMessage.textContent = `Joined room ${inputId}. Waiting for other player...`;
             loadingDiv.style.display = 'none';
         });
 
@@ -296,17 +296,23 @@ function checkAllTilesShut(player) {
 }
 
 socket.on('diceRolled', (data) => {
+    console.log('Received diceRolled event:', data);
     diceTotal = data.diceTotal;
     currentPlayer = data.currentPlayer;
 
     // Use the new helper function to get available tiles and check if can shut
     const availableTiles = getAvailableTilesForPlayer(currentPlayer);
+    console.log(`Player ${currentPlayer} available tiles:`, availableTiles);
     const canShut = canSumToTarget(availableTiles, diceTotal);
+    console.log(`Can shut tiles for roll ${diceTotal}:`, canShut);
 
     if (!canShut) {
+        console.log(`Player ${currentPlayer} cannot shut tiles for roll ${diceTotal}`);
         consecutiveFailedTurns++;
+        console.log(`consecutiveFailedTurns incremented to ${consecutiveFailedTurns}`);
+        
         if (consecutiveFailedTurns >= 2) {
-            // Game over due to two consecutive failed turns
+            console.log('Two consecutive failed turns - ending game');
             statusMessage.textContent = `No moves possible for two consecutive turns. Game over.`;
             gameActive = false;
             rollBtn.disabled = true;
@@ -315,13 +321,17 @@ socket.on('diceRolled', (data) => {
             socket.emit('gameOver', { roomId: roomInput.value.trim(), message: 'Game over: No moves possible for two consecutive turns.' });
             return;
         } else {
-            // Pass turn to next player
+            console.log(`Emitting endTurn event for player ${currentPlayer} - no valid moves`);
             statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal} but cannot shut any tiles. Passing turn to next player.`;
-            console.log('Emitting endTurn event with currentPlayer:', currentPlayer);
-            socket.emit('endTurn', { roomId: roomInput.value.trim(), currentPlayer: currentPlayer });
+            socket.emit('endTurn', { 
+                roomId: roomInput.value.trim(), 
+                currentPlayer: currentPlayer,
+                reason: 'no_valid_moves'
+            });
             return;
         }
     } else {
+        console.log('Resetting consecutiveFailedTurns to 0 - valid moves available');
         consecutiveFailedTurns = 0;
     }
 
@@ -331,21 +341,44 @@ socket.on('diceRolled', (data) => {
     updateUI();
 });
 
-        socket.on('tileShut', (data) => {
-            shutTileByServer(data.tileValue, data.player);
-            updatePlayerScores(data.player, data.score);
-        });
+socket.on('tileShut', (data) => {
+    shutTileByServer(data.tileValue, data.player);
+    updatePlayerScores(data.player, data.score);
 
-        socket.on('nextTurn', (data) => {
-            console.log('Received nextTurn event:', data);
-            currentPlayer = data.nextPlayer;
-            selectedTiles = [];
-            canSelectTiles = (playerNumber === currentPlayer);
-            statusMessage.textContent = `Player ${currentPlayer}'s turn. Roll the dice.`;
-            isRolling = false;
-            rollBtn.disabled = !canSelectTiles;
-            updateUI();
-        });
+    // Check if player has shut all tiles and end game if so
+    if (checkAllTilesShut(data.player)) {
+        gameActive = false;
+        statusMessage.textContent = `Player ${data.player} has shut all tiles and wins the game!`;
+        rollBtn.disabled = true;
+        endTurnBtn.disabled = true;
+        newGameBtn.style.display = 'block';
+        socket.emit('gameOver', { roomId: roomInput.value.trim(), message: `Player ${data.player} wins the game!` });
+    }
+});
+
+socket.on('nextTurn', (data) => {
+    console.log('Received nextTurn event:', data);
+    
+    // Update current player
+    currentPlayer = data.nextPlayer;
+    console.log(`Turn switched to Player ${currentPlayer} (previous: ${data.previousPlayer}, reason: ${data.reason})`);
+    
+    // Reset game state for new turn
+    consecutiveFailedTurns = 0;
+    selectedTiles = [];
+    canSelectTiles = (playerNumber === currentPlayer);
+    isRolling = false;
+    
+    // Update UI
+    if (data.reason === 'no_valid_moves') {
+        statusMessage.textContent = `Player ${data.previousPlayer} had no valid moves. Player ${currentPlayer}'s turn. Roll the dice.`;
+    } else {
+        statusMessage.textContent = `Player ${currentPlayer}'s turn. Roll the dice.`;
+    }
+    
+    rollBtn.disabled = !canSelectTiles;
+    updateUI();
+});
 
         socket.on('gameOver', (data) => {
             gameActive = false;

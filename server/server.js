@@ -137,6 +137,9 @@ io.on('connection', (socket) => {
     }
     roomState.playerScores[player] += tileValue;
 
+    console.log(`Player ${player} shut tiles:`, Array.from(roomState.shutTiles[player]));
+    console.log(`Current player: ${roomState.currentPlayer}`);
+
     io.to(data.roomId).emit('tileShut', data);
 
     // Check if player has shut all tiles
@@ -150,13 +153,31 @@ io.on('connection', (socket) => {
     console.log('Received endTurn event:', data);
     const roomState = roomStates[data.roomId];
     if (!roomState) {
-      console.log('No room state found for roomId:', data.roomId);
-      return;
+        console.log('No room state found for roomId:', data.roomId);
+        return;
     }
+
+    // Verify the current player matches before switching turns
+    if (roomState.currentPlayer !== data.currentPlayer) {
+        console.log(`Turn switch rejected - current player mismatch. Expected: ${roomState.currentPlayer}, Got: ${data.currentPlayer}`);
+        return;
+    }
+
     // Switch current player
+    const previousPlayer = roomState.currentPlayer;
     roomState.currentPlayer = roomState.currentPlayer === 1 ? 2 : 1;
-    console.log('Switching turn to player:', roomState.currentPlayer);
-    io.to(data.roomId).emit('nextTurn', { nextPlayer: roomState.currentPlayer });
+    
+    console.log(`Turn switched from Player ${previousPlayer} to Player ${roomState.currentPlayer}`);
+    console.log(`Reason for turn switch: ${data.reason || 'normal_turn_end'}`);
+    console.log(`Player 1 shut tiles:`, Array.from(roomState.shutTiles[1]));
+    console.log(`Player 2 shut tiles:`, Array.from(roomState.shutTiles[2]));
+    
+    // Emit nextTurn event to all clients in the room
+    io.to(data.roomId).emit('nextTurn', { 
+        nextPlayer: roomState.currentPlayer,
+        previousPlayer: previousPlayer,
+        reason: data.reason || 'normal_turn_end'
+    });
   });
 
   socket.on('disconnect', () => {

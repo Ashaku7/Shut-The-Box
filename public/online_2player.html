@@ -847,16 +847,34 @@ function checkDiceSettled() {
         if (!sumDisplayed && currentResult[0] !== 0 && currentResult[1] !== 0) {
             const sum = currentResult.reduce((a, v) => a + v, 0);
             diceTotal = sum;
-            statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
-            sumDisplay.textContent = `You have rolled ${diceTotal}`;
-            sumDisplay.style.display = 'block';
-            isRolling = false;
-            canSelectTiles = (playerNumber === currentPlayer);
-            rollBtn.disabled = !canSelectTiles;
-            sumDisplayed = true;
+            
+            // Check if current player can make valid moves
+            const canMakeMoves = hasValidMoves(currentPlayer, sum);
+            console.log(`Player ${currentPlayer} can make moves for roll ${sum}:`, canMakeMoves);
 
-            // Emit diceRolled event with diceTotal and currentPlayer
-            socket.emit('diceRolled', { roomId: roomInput.value.trim(), diceTotal: sum, currentPlayer });
+            if (!canMakeMoves) {
+                console.log(`No valid moves for Player ${currentPlayer}, switching turns`);
+                socket.emit('rollDice', { 
+                    roomId: roomInput.value.trim(), 
+                    diceTotal: sum, 
+                    currentPlayer: currentPlayer,
+                    noValidMoves: true
+                });
+            } else {
+                statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
+                sumDisplay.textContent = `You have rolled ${diceTotal}`;
+                sumDisplay.style.display = 'block';
+                isRolling = false;
+                canSelectTiles = (playerNumber === currentPlayer);
+                rollBtn.disabled = !canSelectTiles;
+                sumDisplayed = true;
+
+                socket.emit('rollDice', { 
+                    roomId: roomInput.value.trim(), 
+                    diceTotal: sum, 
+                    currentPlayer: currentPlayer 
+                });
+            }
         }
     }
 }
@@ -1152,6 +1170,12 @@ function updatePlayerScoresUI() {
 
             checkDiceSettled();
             renderer.render(scene, camera);
+        }
+
+        function hasValidMoves(player, roll) {
+            const availableTiles = getAvailableTilesForPlayer(player);
+            console.log(`Checking valid moves for Player ${player}, roll: ${roll}, available tiles:`, availableTiles);
+            return canSumToTarget(availableTiles, roll);
         }
     </script>
 </body>

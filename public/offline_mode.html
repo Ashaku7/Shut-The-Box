@@ -110,7 +110,9 @@
 
             threePlayerBtn.addEventListener('click', showUnderConstruction);
             fourPlayerBtn.addEventListener('click', showUnderConstruction);
-            playBotBtn.addEventListener('click', showUnderConstruction);
+            playBotBtn.addEventListener('click', () => {
+                window.location.href = 'offline_bot.html';
+            });
         });
     </script>
 </body>

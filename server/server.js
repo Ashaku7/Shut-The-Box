@@ -84,32 +84,46 @@ io.on('connection', (socket) => {
     console.log('Received rollDice event:', data);
     const roomState = roomStates[data.roomId];
     if (!roomState) {
-      console.log('No room state found for roomId:', data.roomId);
-      return;
+        console.log('No room state found for roomId:', data.roomId);
+        return;
     }
 
     const currentPlayer = roomState.currentPlayer;
-    const shutTilesSet = roomState.shutTiles[currentPlayer];
+    console.log(`Processing roll for Player ${currentPlayer}, diceTotal: ${data.diceTotal}`);
+
     // Get available tiles for current player
+    const shutTilesSet = roomState.shutTiles[currentPlayer];
     const availableTiles = [];
     for (let i = 1; i <= 9; i++) {
-      if (!shutTilesSet.has(i)) {
-        availableTiles.push(i);
-      }
+        if (!shutTilesSet.has(i)) {
+            availableTiles.push(i);
+        }
     }
+    console.log(`Available tiles for Player ${currentPlayer}:`, availableTiles);
 
     // Check if player can shut tiles for the roll
-    if (!canSumToTarget(availableTiles, data.diceTotal)) {
-      // Pass turn to next player
-      roomState.currentPlayer = currentPlayer === 1 ? 2 : 1;
-      console.log('No moves possible, switching turn to player:', roomState.currentPlayer);
-      io.to(data.roomId).emit('nextTurn', { nextPlayer: roomState.currentPlayer });
-      return;
+    const canShut = canSumToTarget(availableTiles, data.diceTotal);
+    console.log(`Can Player ${currentPlayer} shut tiles for roll ${data.diceTotal}?`, canShut);
+
+    if (!canShut) {
+        console.log(`No valid moves for Player ${currentPlayer}, switching turns`);
+        // Switch to next player
+        roomState.currentPlayer = currentPlayer === 1 ? 2 : 1;
+        console.log(`Turn switched to Player ${roomState.currentPlayer}`);
+        
+        // Emit nextTurn event immediately
+        io.to(data.roomId).emit('nextTurn', {
+            nextPlayer: roomState.currentPlayer,
+            previousPlayer: currentPlayer,
+            reason: 'no_valid_moves'
+        });
+        return;
     }
 
+    // If player can shut tiles, emit diceRolled event
     io.to(data.roomId).emit('diceRolled', {
-      diceTotal: data.diceTotal,
-      currentPlayer: currentPlayer
+        diceTotal: data.diceTotal,
+        currentPlayer: currentPlayer
     });
   });
 

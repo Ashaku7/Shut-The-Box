@@ -113,6 +113,10 @@
 </head>
 <body>
     <div id="loading">Loading 3D models...</div>
+    <div id="scoreDisplay" style="position: absolute; top: 20px; left: 20px; z-index: 20; font-family: 'Georgia', 'Times New Roman', serif; font-size: 1.6rem; color: #f5e6c8; background: #7b4a19cc; border-radius: 10px; padding: 10px 22px 10px 16px; border: 2px solid #a97c50; display: flex; align-items: center; gap: 10px; letter-spacing: 1px; box-shadow: 0 2px 8px #5a3310a0; text-shadow: 1px 1px 2px #5a3310a0;">
+        <span style="font-size: 1.7rem;">🎲</span>
+        <span id="scoreText">Score: 45</span>
+    </div>
     <div id="game-container">
         <div id="status-message" class="status">Roll the dice to start!</div>
         <div id="sumDisplay" style="display:none; position: absolute; top: 10px; left: 10px; color: white; font-size: 24px; font-family: monospace; background: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 5px; z-index: 10;"></div>
@@ -120,6 +124,7 @@
             <button id="roll-btn">Roll Dice</button>
             <button id="end-turn-btn" disabled>End Turn</button>
             <button id="new-game-btn" style="display: none;">New Game</button>
+            <button id="retry-roll-btn" style="display: none;">Retry Roll</button>
         </div>
     </div>
 
@@ -138,6 +143,8 @@
         let tiles = [];
         let diceLoaded = false;
         let sumDisplayed = false; // Global flag to ensure sum is displayed only once per roll
+        let rollTimeout = null; // Timer for dice roll timeout
+        const ROLL_TIMEOUT_MS = 3000; // 3 seconds compulsory timeout
         
         // Three.js variables
         let scene, camera, renderer, board;
@@ -167,15 +174,22 @@
         const newGameBtn = document.getElementById('new-game-btn');
         const statusMessage = document.getElementById('status-message');
         const loadingDiv = document.getElementById('loading');
+        const scoreText = document.getElementById('scoreText');
+        const retryRollBtn = document.getElementById('retry-roll-btn');
         
         // Initialize game
         init();
+        updateScoreDisplay();
         animate();
         
         // Event listeners
         rollBtn.addEventListener('click', rollDice);
         endTurnBtn.addEventListener('click', endTurn);
         newGameBtn.addEventListener('click', resetGame);
+        if (retryRollBtn) retryRollBtn.addEventListener('click', () => {
+            retryRollBtn.style.display = 'none';
+            rollDice(true);
+        });
         
         // Initialize the game
         function init() {
@@ -494,9 +508,15 @@ function addDiceEvents(dice, diceIdx) {
                     console.log('Sum display shown:', sumDisplay.textContent);
                     isRolling = false;
                     canSelectTiles = true;
-                    rollBtn.disabled = false;
+                    // rollBtn.disabled = false; // Do NOT enable roll button here
                     sumDisplayed = true;
-    
+
+                    // Clear the roll timeout since dice have settled
+                    if (rollTimeout) {
+                        clearTimeout(rollTimeout);
+                        rollTimeout = null;
+                    }
+
                     // Check if any valid moves are available
                     if (!hasValidMoves()) {
                         endGame();
@@ -506,62 +526,69 @@ function addDiceEvents(dice, diceIdx) {
         }
         
         // Roll dice function
-function rollDice() {
-            if (!gameActive || isRolling || !diceLoaded) return;
-            
-            console.log('rollDice function called');
-            isRolling = true;
-            rollBtn.disabled = true;
-            statusMessage.textContent = "Rolling...";
-            sumDisplayed = false; // Reset sumDisplayed flag at start of roll
-            console.log('Roll started, sumDisplayed reset to false');
-            
-            // Reset dice values
-            currentResult = [0, 0];
-            // sumDisplay.textContent = `Sum: 0`; // Removed sum display update
-            
-            // Apply random forces to dice
-            const quaternion = new THREE.Quaternion();
-            
-            diceArray.forEach((d, dIdx) => {
-                // Generate random starting position within the board boundaries
-                d.startPos = [Math.random(), Math.random(), Math.random()];
-                quaternion.setFromEuler(new THREE.Euler(2 * Math.PI * d.startPos[0], 0, 2 * Math.PI * d.startPos[1]));
-                
-                // Use more controlled force with increased magnitude for better rolling
-                const force = 8 + 4 * d.startPos[2]; // Increased force
-                
-                // Position dice above the two tile rows within the green region boundaries
-                // Green region width approx 10 units, depth approx 2 units centered at z=-5 and z=5
-                const diceX = (Math.random() * 10) - 5; // Random X between -5 and 5 (within green region width)
-                const diceY = 6; // Height above the board
-                const diceZPositions = [-5, 5]; // Above top and bottom tile rows (green region centers)
-                
-                d.body.position = new CANNON.Vec3(diceX, diceY, diceZPositions[dIdx]);
-                d.body.velocity.setZero();
-                d.body.angularVelocity.setZero();
-                
-                // Apply impulse in a more dynamic direction
-                d.body.applyImpulse(
-                    new CANNON.Vec3(
-                        force * (Math.random() - 0.5), // Random X direction
-                        force * 0.7,                   // Stronger upward force
-                        force * (Math.random() - 0.5)  // Random Z direction
-                    ),
-                    new CANNON.Vec3(0, 0, 0)           // Apply at center of mass
-                );
-                
-                // Apply random rotation with higher angular velocity
-                d.body.angularVelocity.set(
-                    Math.random() * 15 - 7.5,
-                    Math.random() * 15 - 7.5,
-                    Math.random() * 15 - 7.5
-                );
-                
-                d.body.quaternion.copy(quaternion);
-                d.body.allowSleep = true;
-            });
+function rollDice(force = false) {
+    if (!gameActive || !diceLoaded) return;
+    if (isRolling && !force) return;
+    console.log('rollDice function called');
+    isRolling = true;
+    rollBtn.disabled = true;
+    statusMessage.textContent = "Rolling...";
+    sumDisplayed = false;
+    console.log('Roll started, sumDisplayed reset to false');
+    currentResult = [0, 0];
+    // Clear any existing timeout before starting a new roll
+    if (rollTimeout) {
+        clearTimeout(rollTimeout);
+        rollTimeout = null;
+    }
+    if (retryRollBtn) retryRollBtn.style.display = 'none';
+    // Start a new compulsory timeout for this roll
+    rollTimeout = setTimeout(() => {
+        if (!sumDisplayed && retryRollBtn) {
+            console.warn('Dice roll compulsory timeout reached, show Retry Roll button.');
+            retryRollBtn.style.display = 'inline-block';
         }
+    }, 4000); // 4 seconds
+
+    // Apply random forces, positions, and rotations to dice
+    diceArray.forEach((d, dIdx) => {
+        // Generate random starting position within the board boundaries
+        d.startPos = [Math.random(), Math.random(), Math.random()];
+        // Randomize rotation
+        const euler = new THREE.Euler(
+            Math.random() * 2 * Math.PI,
+            Math.random() * 2 * Math.PI,
+            Math.random() * 2 * Math.PI
+        );
+        d.body.quaternion.setFromEuler(euler.x, euler.y, euler.z);
+        // Use more controlled force with increased magnitude for better rolling
+        const force = 8 + 4 * d.startPos[2];
+        // Position dice above the board
+        const diceX = (Math.random() * 10) - 5;
+        const diceY = 6;
+        const diceZPositions = [-5, 5];
+        d.body.position = new CANNON.Vec3(diceX, diceY, diceZPositions[dIdx]);
+        d.body.velocity.setZero();
+        d.body.angularVelocity.setZero();
+        d.body.wakeUp(); // Ensure dice are awake before applying forces
+        // Apply impulse in a more dynamic direction
+        d.body.applyImpulse(
+            new CANNON.Vec3(
+                force * (Math.random() - 0.5),
+                force * 0.7,
+                force * (Math.random() - 0.5)
+            ),
+            new CANNON.Vec3(0, 0, 0)
+        );
+        // Apply random angular velocity
+        d.body.angularVelocity.set(
+            Math.random() * 15 - 7.5,
+            Math.random() * 15 - 7.5,
+            Math.random() * 15 - 7.5
+        );
+        d.body.allowSleep = true;
+    });
+}
         
         // Create the wooden board
         function createBoard() {
@@ -664,10 +691,10 @@ function rollDice() {
                 metalness: 0.1
             });
             
-            // Create top row of tiles (flipped upside down in image)
+            // Create bottom row of tiles (for gameplay)
             for (let i = 0; i < 9; i++) {
                 const tile = new THREE.Mesh(tileGeometry, tileMaterial.clone());
-                tile.position.set(-4 + i, 0.35, -5);
+                tile.position.set(-4 + i, 0.35, 5); // z = 5 (bottom row)
                 tile.castShadow = true;
                 tile.receiveShadow = true;
                 tile.userData = { value: i + 1, isShut: false, isSelected: false };
@@ -677,21 +704,6 @@ function rollDice() {
                 
                 scene.add(tile);
                 tiles.push(tile);
-            }
-            
-            // Create bottom row of tiles
-            for (let i = 0; i < 9; i++) {
-                const tile = new THREE.Mesh(tileGeometry, tileMaterial.clone());
-                tile.position.set(-4 + i, 0.35, 5);
-                tile.castShadow = true;
-                tile.receiveShadow = true;
-                tile.userData = { value: i + 1, isShut: false, isSelected: false };
-                
-                // Add number to tile
-                addNumberToTile(tile, i + 1);
-                
-                scene.add(tile);
-                // We won't use these for gameplay, just for display
             }
         }
         
@@ -815,7 +827,7 @@ function rollDice() {
             
             selectedTiles = [];
             endTurnBtn.disabled = true;
-            
+            updateScoreDisplay();
             // Check if all tiles are shut (win condition)
             const allShut = tiles.slice(0, 9).every(tile => tile.userData.isShut);
             
@@ -870,6 +882,7 @@ function rollDice() {
             rollBtn.style.display = 'none';
             endTurnBtn.style.display = 'none';
             newGameBtn.style.display = 'block';
+            updateScoreDisplay();
         }
         
         // Reset game
@@ -900,6 +913,13 @@ function rollDice() {
             endTurnBtn.style.display = 'block';
             endTurnBtn.disabled = true;
             newGameBtn.style.display = 'none';
+            updateScoreDisplay();
+            // Clear any roll timeout
+            if (rollTimeout) {
+                clearTimeout(rollTimeout);
+                rollTimeout = null;
+            }
+            if (retryRollBtn) retryRollBtn.style.display = 'none';
         }
         
         // Animation loop
@@ -945,6 +965,14 @@ function rollDice() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Helper to update score display
+        function updateScoreDisplay() {
+            // Score is the sum of all open (not shut) tiles
+            const openTiles = tiles.filter(tile => !tile.userData.isShut);
+            const score = openTiles.reduce((sum, tile) => sum + tile.userData.value, 0);
+            scoreText.textContent = `Score: ${score}`;
         }
     </script>
 </body>

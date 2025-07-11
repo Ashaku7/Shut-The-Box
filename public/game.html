@@ -113,11 +113,20 @@
 </head>
 <body>
     <div id="loading">Loading 3D models...</div>
+    <!-- Player labels for professional look -->
+    <div id="player1-label" style="position: absolute; left: 50%; top: 110px; transform: translateX(-50%); z-index: 10; font-family: 'Georgia', 'Times New Roman', serif; font-size: 1.4rem; color: #fffbe7; background: #4a2c0aee; border-radius: 10px; padding: 8px 24px; border: 2px solid #a97c50; box-shadow: 0 2px 8px #5a3310a0; display: flex; align-items: center; gap: 10px; letter-spacing: 1px; text-shadow: 1px 1px 2px #5a3310a0;"><span style='font-size:1.5rem;'>🧑‍🦱</span> Player 1</div>
+    <div id="player2-label" style="position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%); z-index: 10; font-family: 'Georgia', 'Times New Roman', serif; font-size: 1.4rem; color: #fffbe7; background: #4a2c0aee; border-radius: 10px; padding: 8px 24px; border: 2px solid #a97c50; box-shadow: 0 2px 8px #5a3310a0; display: flex; align-items: center; gap: 10px; letter-spacing: 1px; text-shadow: 1px 1px 2px #5a3310a0;"><span style='font-size:1.5rem;'>🧑‍🦰</span> Player 2</div>
     <div id="game-container">
         <div id="status-message" class="status">Roll the dice to start!</div>
-        <div id="player-scores" class="status" style="top: 60px; font-size: 16px; background-color: rgba(255, 255, 255, 0.7); color: black; border-radius: 5px; padding: 5px 10px; width: 200px; left: 10px; transform: none; text-align: left; z-index: 2; position: absolute;">
-            Player 1 Score: 0<br>
-            Player 2 Score: 0
+        <div id="scoreDisplay" style="position: absolute; top: 20px; left: 20px; z-index: 20; font-family: 'Georgia', 'Times New Roman', serif; font-size: 1.2rem; color: #f5e6c8; background: #7b4a19cc; border-radius: 10px; padding: 10px 28px 10px 18px; border: 2px solid #a97c50; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; letter-spacing: 1px; box-shadow: 0 2px 8px #5a3310a0; text-shadow: 1px 1px 2px #5a3310a0; min-width: 170px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.3rem;">🧑‍🦱</span>
+                <span id="scoreText1">Player 1: 0</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.3rem;">🧑‍🦰</span>
+                <span id="scoreText2">Player 2: 0</span>
+            </div>
         </div>
         <div id="sumDisplay" style="display:none; position: absolute; top: 10px; left: 10px; color: white; font-size: 24px; font-family: monospace; background: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 5px; z-index: 10;"></div>
         <div class="ui-container">
@@ -177,7 +186,8 @@
         const newGameBtn = document.getElementById('new-game-btn');
         const statusMessage = document.getElementById('status-message');
         const loadingDiv = document.getElementById('loading');
-        const playerScoresDiv = document.getElementById('player-scores');
+        const scoreText1 = document.getElementById('scoreText1');
+        const scoreText2 = document.getElementById('scoreText2');
         
         // Initialize game
         init();
@@ -555,14 +565,14 @@ function rollDice() {
                 rollTimeoutId = null;
             }
 
-            // Start 10 second timer to show retry button if dice roll takes too long
+            // Start 4 second timer to show retry button if dice roll takes too long
             rollTimeoutId = setTimeout(() => {
-                if (isRolling) {
-                    statusMessage.textContent = "Dice roll taking too long. Click Retry Roll.";
+                if (isRolling && !sumDisplayed) {
+                    statusMessage.textContent = "Dice stuck. Please click Retry Roll.";
                     retryRollBtn.style.display = 'inline-block';
                     rollBtn.disabled = true;
                 }
-            }, 10000);
+            }, 4000);
             
             // Reset dice values
             currentResult = [0, 0];
@@ -942,7 +952,6 @@ function rollDice() {
                     sumDisplay.style.display = 'block';
                     isRolling = false;
                     canSelectTiles = true;
-                    rollBtn.disabled = false;
                     sumDisplayed = true;
     
                     // Check if any valid moves are available
@@ -985,7 +994,9 @@ function rollDice() {
             if (winner) {
                 statusMessage.textContent = `Game over! Player ${winner} wins with the highest score!`;
             } else {
-                statusMessage.textContent = `Game over! It's a tie!`;
+                const openTiles = tiles.slice(0, 9).filter(tile => !tile.userData.isShut);
+                const score = openTiles.reduce((sum, tile) => sum + tile.userData.value, 0);
+                statusMessage.textContent = `Game over! Your score is ${score} (lower is better).`;
             }
             gameActive = false;
             rollBtn.style.display = 'none';
@@ -1046,7 +1057,7 @@ function rollDice() {
         // Reset game
         function resetGame() {
             // Reset tiles
-            for (let i = 0; i < 9; i++) {
+            for (let i = 0; i < tiles.length; i++) {
                 const tile = tiles[i];
                 tile.userData.isShut = false;
                 tile.userData.isSelected = false;
@@ -1076,6 +1087,7 @@ function rollDice() {
             endTurnBtn.style.display = 'block';
             endTurnBtn.disabled = true;
             newGameBtn.style.display = 'none';
+            retryRollBtn.style.display = 'none';
         }
         
         // Animation loop
@@ -1118,7 +1130,8 @@ function rollDice() {
         
         // Update player scores UI
         function updatePlayerScoresUI() {
-            playerScoresDiv.innerHTML = `Player 1 Score: ${playerScores[1]}<br>Player 2 Score: ${playerScores[2]}`;
+            scoreText1.textContent = `Player 1: ${playerScores[1]}`;
+            scoreText2.textContent = `Player 2: ${playerScores[2]}`;
         }
         
         // Handle window resize

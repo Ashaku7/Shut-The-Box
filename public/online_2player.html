@@ -101,22 +101,36 @@
 </head>
 <body>
     <div id="loading">Loading 3D models...</div>
+    <div id="winner-message" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:1001; background:linear-gradient(90deg,#ffe082 0%,#c6a664 100%); color:#4a2c0a; font-size:2.5rem; font-family:'Georgia','Times New Roman',serif; font-weight:bold; border-radius:18px; box-shadow:0 4px 32px #0008,0 0 0 8px #fffbe7; padding:36px 64px; text-align:center; letter-spacing:2px; border:4px solid #fffbe7; text-shadow:2px 2px 8px #fffbe7,0 0 2px #c6a664;">
+        <span id="winner-emoji" style="font-size:3rem;">🏆</span>
+        <span id="winner-text">Player 1 Wins!</span>
+    </div>
+    <!-- Player labels for professional look -->
+    <div id="player1-label" style="position: absolute; left: 50%; top: 110px; transform: translateX(-50%); z-index: 10; font-family: 'Georgia', 'Times New Roman', serif; font-size: 1.4rem; color: #fffbe7; background: #4a2c0aee; border-radius: 10px; padding: 8px 24px; border: 2px solid #a97c50; box-shadow: 0 2px 8px #5a3310a0; display: flex; align-items: center; gap: 10px; letter-spacing: 1px; text-shadow: 1px 1px 2px #5a3310a0;"><span style='font-size:1.5rem;'>🧑‍🦱</span> Player 1</div>
+    <div id="player2-label" style="position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%); z-index: 10; font-family: 'Georgia', 'Times New Roman', serif; font-size: 1.4rem; color: #fffbe7; background: #4a2c0aee; border-radius: 10px; padding: 8px 24px; border: 2px solid #a97c50; box-shadow: 0 2px 8px #5a3310a0; display: flex; align-items: center; gap: 10px; letter-spacing: 1px; text-shadow: 1px 1px 2px #5a3310a0;"><span style='font-size:1.5rem;'>🧑‍🦰</span> Player 2</div>
+    <!-- Scorecard -->
+    <div id="scoreDisplay" style="position: absolute; top: 20px; left: 20px; z-index: 20; font-family: 'Georgia', 'Times New Roman', serif; font-size: 1.2rem; color: #f5e6c8; background: #7b4a19cc; border-radius: 10px; padding: 10px 28px 10px 18px; border: 2px solid #a97c50; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; letter-spacing: 1px; box-shadow: 0 2px 8px #5a3310a0; text-shadow: 1px 1px 2px #5a3310a0; min-width: 170px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.3rem;">🧑‍🦱</span>
+            <span id="scoreText1">Player 1: 0</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 1.3rem;">🧑‍🦰</span>
+            <span id="scoreText2">Player 2: 0</span>
+        </div>
+    </div>
     <div id="game-container">
-        <div id="status-message" class="status">Enter a room ID to start or join a game.</div>
+        <div id="status-message" class="status" style="background: #4a2c0aee; color: #fffbe7; border: 2px solid #a97c50; font-family: 'Georgia', 'Times New Roman', serif; font-size: 1.3rem; letter-spacing: 1px; text-shadow: 1px 1px 2px #5a3310a0;">Enter a room ID to start or join a game.</div>
         <div id="room-container" style="position:absolute; top:60px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.7); padding:10px 20px; border-radius:8px; z-index:3; color:white; font-size:16px;">
             <input type="text" id="room-input" placeholder="Enter room ID" />
             <button id="join-room-btn">Join Room</button>
         </div>
-        <div id="player-scores" class="status" style="top: 100px; font-size: 16px; background-color: rgba(255, 255, 255, 0.7); color: black; border-radius: 5px; padding: 5px 10px; width: 200px; left: 10px; transform: none; text-align: left; z-index: 2; position: absolute;">
-            Player 1 Score: 0<br>
-            Player 2 Score: 0
-        </div>
         <div id="sumDisplay" style="display:none; position: absolute; top: 10px; left: 10px; color: white; font-size: 24px; font-family: monospace; background: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 5px; z-index: 10;"></div>
-        <div class="ui-container" style="display:none;">
+        <div class="ui-container">
             <button id="roll-btn">Roll Dice</button>
             <button id="end-turn-btn" disabled>End Turn</button>
-            <button id="retry-roll-btn" style="display: none;">Retry Roll</button>
             <button id="new-game-btn" style="display: none;">New Game</button>
+            <button id="retry-roll-btn" style="display: none;">Retry Roll</button>
         </div>
     </div>
 
@@ -179,6 +193,14 @@
         const joinRoomBtn = document.getElementById('join-room-btn');
         const roomInput = document.getElementById('room-input');
         const uiContainer = document.querySelector('.ui-container');
+        const winnerMessage = document.getElementById('winner-message');
+        const winnerText = document.getElementById('winner-text');
+        const winnerEmoji = document.getElementById('winner-emoji');
+        const scoreText1 = document.getElementById('scoreText1');
+        const scoreText2 = document.getElementById('scoreText2');
+
+        // Add this after DOM elements are defined and before any game logic that needs it
+        rollBtn.addEventListener('click', () => rollDice(false));
 
         // Socket.io event handlers
         socket.on('connect_error', (error) => {
@@ -227,6 +249,8 @@
             uiContainer.style.display = 'flex';
             updatePlayerScoresUI();
             updateUI();
+            // TEMPORARY DEBUG: Force enable the Roll Dice button for testing
+            rollBtn.disabled = false;
         });
 
         joinRoomBtn.addEventListener('click', () => {
@@ -239,7 +263,7 @@
             socket.emit('joinRoom', inputRoomId);
             roomInput.disabled = true;
             joinRoomBtn.disabled = true;
-            statusMessage.textContent = `Joined room ${inputId}. Waiting for other player...`;
+            statusMessage.textContent = `Joined room ${inputRoomId}. Waiting for other player...`;
             loadingDiv.style.display = 'none';
         });
 
@@ -296,49 +320,25 @@ function checkAllTilesShut(player) {
 }
 
 socket.on('diceRolled', (data) => {
-    console.log('Received diceRolled event:', data);
+    console.log('diceRolled event received:', data);
     diceTotal = data.diceTotal;
     currentPlayer = data.currentPlayer;
-
-    // Use the new helper function to get available tiles and check if can shut
-    const availableTiles = getAvailableTilesForPlayer(currentPlayer);
-    console.log(`Player ${currentPlayer} available tiles:`, availableTiles);
-    const canShut = canSumToTarget(availableTiles, diceTotal);
-    console.log(`Can shut tiles for roll ${diceTotal}:`, canShut);
-
-    if (!canShut) {
-        console.log(`Player ${currentPlayer} cannot shut tiles for roll ${diceTotal}`);
-        consecutiveFailedTurns++;
-        console.log(`consecutiveFailedTurns incremented to ${consecutiveFailedTurns}`);
-        
-        if (consecutiveFailedTurns >= 2) {
-            console.log('Two consecutive failed turns - ending game');
-            statusMessage.textContent = `No moves possible for two consecutive turns. Game over.`;
-            gameActive = false;
-            rollBtn.disabled = true;
-            endTurnBtn.disabled = true;
-            newGameBtn.style.display = 'block';
-            socket.emit('gameOver', { roomId: roomInput.value.trim(), message: 'Game over: No moves possible for two consecutive turns.' });
-            return;
-        } else {
-            console.log(`Emitting endTurn event for player ${currentPlayer} - no valid moves`);
-            statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal} but cannot shut any tiles. Passing turn to next player.`;
-            socket.emit('endTurn', { 
-                roomId: roomInput.value.trim(), 
-                currentPlayer: currentPlayer,
-                reason: 'no_valid_moves'
-            });
-            return;
-        }
+    // Always update UI based on canShut flag
+    if (!data.canShut) {
+        canSelectTiles = false;
+        isRolling = false;
+        updateUI();
+        const nextPlayer = currentPlayer === 1 ? 2 : 1;
+        statusMessage.textContent = `Player ${currentPlayer} cannot shut any tiles. Passing turn to Player ${nextPlayer}.`;
+        console.log('diceRolled: cannot shut, disabling everything until nextTurn', {playerNumber, currentPlayer});
+        return;
     } else {
-        console.log('Resetting consecutiveFailedTurns to 0 - valid moves available');
-        consecutiveFailedTurns = 0;
+        statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
+        canSelectTiles = (playerNumber === currentPlayer);
+        isRolling = false;
+        updateUI();
+        console.log('diceRolled: can shut, enabling selection for current player', {playerNumber, currentPlayer});
     }
-
-    statusMessage.textContent = `Player ${currentPlayer} rolled ${diceTotal}. Select tiles that sum to ${diceTotal}.`;
-    canSelectTiles = (playerNumber === currentPlayer);
-    isRolling = false;
-    updateUI();
 });
 
 socket.on('tileShut', (data) => {
@@ -357,26 +357,21 @@ socket.on('tileShut', (data) => {
 });
 
 socket.on('nextTurn', (data) => {
-    console.log('Received nextTurn event:', data);
-    
-    // Update current player
     currentPlayer = data.nextPlayer;
-    console.log(`Turn switched to Player ${currentPlayer} (previous: ${data.previousPlayer}, reason: ${data.reason})`);
-    
-    // Reset game state for new turn
     consecutiveFailedTurns = 0;
     selectedTiles = [];
-    canSelectTiles = (playerNumber === currentPlayer);
+    canSelectTiles = false; // Only allow tile selection after a roll
     isRolling = false;
-    
-    // Update UI
-    if (data.reason === 'no_valid_moves') {
-        statusMessage.textContent = `Player ${data.previousPlayer} had no valid moves. Player ${currentPlayer}'s turn. Roll the dice.`;
+    if (playerNumber === currentPlayer) {
+        statusMessage.textContent = `Your turn! Roll the dice.`;
+        rollBtn.disabled = false;
+        console.log('nextTurn: enabling roll for current player', {playerNumber, currentPlayer});
     } else {
-        statusMessage.textContent = `Player ${currentPlayer}'s turn. Roll the dice.`;
+        statusMessage.textContent = `Player ${currentPlayer}'s turn. Waiting for them to roll.`;
+        rollBtn.disabled = true;
+        console.log('nextTurn: disabling roll for non-current player', {playerNumber, currentPlayer});
     }
-    
-    rollBtn.disabled = !canSelectTiles;
+    endTurnBtn.disabled = true;
     updateUI();
 });
 
@@ -386,6 +381,22 @@ socket.on('nextTurn', (data) => {
             rollBtn.disabled = true;
             endTurnBtn.disabled = true;
             newGameBtn.style.display = 'block';
+            // Show winner message overlay
+            let winner = '';
+            if (data.message.includes('Player 1 Wins')) {
+                winner = 'Player 1 Wins!';
+                winnerEmoji.textContent = '🏆';
+            } else if (data.message.includes('Player 2 Wins')) {
+                winner = 'Player 2 Wins!';
+                winnerEmoji.textContent = '🏆';
+            } else if (data.message.includes("It's a tie")) {
+                winner = "It's a tie!";
+                winnerEmoji.textContent = '🤝';
+            }
+            if (winner) {
+                winnerText.textContent = winner;
+                winnerMessage.style.display = 'block';
+            }
         });
 
         socket.on('disconnect', () => {
@@ -833,6 +844,7 @@ function checkDiceSettled() {
             clearTimeout(rollTimeoutId);
             rollTimeoutId = null;
         }
+        if (retryRollBtn) retryRollBtn.style.display = 'none';
 
         for (let i = 0; i < diceArray.length; i++) {
             const dice = diceArray[i];
@@ -879,15 +891,27 @@ function checkDiceSettled() {
     }
 }
 
-rollBtn.addEventListener('click', () => {
-    if (!gameActive || isRolling || playerNumber !== currentPlayer) return;
-
+function rollDice(force = false) {
+    if (!gameActive || !diceLoaded) return;
+    if (isRolling && !force) return;
     isRolling = true;
     rollBtn.disabled = true;
     statusMessage.textContent = "Rolling...";
     sumDisplayed = false;
-
     currentResult = [0, 0];
+    // Clear any existing timeout before starting a new roll
+    if (rollTimeoutId) {
+        clearTimeout(rollTimeoutId);
+        rollTimeoutId = null;
+    }
+    if (retryRollBtn) retryRollBtn.style.display = 'none';
+    // Start a new compulsory timeout for this roll
+    rollTimeoutId = setTimeout(() => {
+        if (!sumDisplayed && retryRollBtn) {
+            statusMessage.textContent = "Dice stuck. Please click Retry Roll.";
+            retryRollBtn.style.display = 'inline-block';
+        }
+    }, 4000); // 4 seconds
 
     // Generate dice roll parameters to send to server
     const diceRollParams = [];
@@ -936,7 +960,7 @@ rollBtn.addEventListener('click', () => {
 
     // Emit startRoll event with dice roll parameters to server
     socket.emit('startRoll', { roomId: roomInput.value.trim(), diceRollParams, currentPlayer: playerNumber });
-});
+}
 
 socket.on('startRoll', (data) => {
     if (!data.diceRollParams || data.diceRollParams.length !== 2) return;
@@ -1111,12 +1135,18 @@ function updatePlayerScoresUI() {
     }
     playerScores[1] = score1;
     playerScores[2] = score2;
-    playerScoresDiv.innerHTML = `Player 1 Score: ${score1}<br>Player 2 Score: ${score2}`;
+    scoreText1.textContent = `Player 1: ${score1}`;
+    scoreText2.textContent = `Player 2: ${score2}`;
 }
 
+        // In all UI logic, only allow the current player to roll or select tiles
         function updateUI() {
+            // Only the current player can roll, and only if not rolling
             rollBtn.disabled = !gameActive || isRolling || playerNumber !== currentPlayer;
             endTurnBtn.disabled = !canSelectTiles || selectedTiles.length === 0 || playerNumber !== currentPlayer;
+            // Disable tile selection for the wrong player
+            if (playerNumber !== currentPlayer) canSelectTiles = false;
+            console.log('updateUI:', {playerNumber, currentPlayer, canSelectTiles, isRolling, rollBtnDisabled: rollBtn.disabled});
         }
 
         function onTileClick(event) {

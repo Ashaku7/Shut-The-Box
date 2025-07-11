@@ -20,6 +20,9 @@ app.use(express.static(path.join(__dirname, '../dist')));
 
 const PORT = process.env.PORT || 3000;
 
+// Add a mapping from socket.id to player number for each room
+const roomPlayers = {};
+
 // Helper function to check if all tiles 1-9 are shut
 function allTilesShut(shutTiles) {
   for (let i = 1; i <= 9; i++) {
@@ -66,6 +69,9 @@ io.on('connection', (socket) => {
     if (players) {
       playerNumber = players.size; // 1 or 2
     }
+    // Track which socket is which player in the room
+    if (!roomPlayers[roomId]) roomPlayers[roomId] = {};
+    roomPlayers[roomId][playerNumber] = socket.id;
     socket.emit('assignPlayerNumber', playerNumber);
 
     if (players.size === 2) {
@@ -89,6 +95,11 @@ io.on('connection', (socket) => {
     }
 
     const currentPlayer = roomState.currentPlayer;
+    // Validate that the socket is the current player
+    if (!roomPlayers[data.roomId] || roomPlayers[data.roomId][currentPlayer] !== socket.id) {
+      console.log('rollDice rejected: not current player');
+      return;
+    }
     console.log(`Processing roll for Player ${currentPlayer}, diceTotal: ${data.diceTotal}`);
 
     // Get available tiles for current player
@@ -99,11 +110,20 @@ io.on('connection', (socket) => {
             availableTiles.push(i);
         }
     }
+    console.log(`Player ${currentPlayer} shutTiles:`, Array.from(shutTilesSet));
+    console.log(`Player ${currentPlayer} availableTiles:`, availableTiles);
     console.log(`Available tiles for Player ${currentPlayer}:`, availableTiles);
 
     // Check if player can shut tiles for the roll
     const canShut = canSumToTarget(availableTiles, data.diceTotal);
     console.log(`Can Player ${currentPlayer} shut tiles for roll ${data.diceTotal}?`, canShut);
+
+    // Always emit diceRolled with canShut flag
+    io.to(data.roomId).emit('diceRolled', {
+      diceTotal: data.diceTotal,
+      currentPlayer: currentPlayer,
+      canShut: canShut
+    });
 
     if (!canShut) {
         console.log(`No valid moves for Player ${currentPlayer}, switching turns`);
@@ -120,11 +140,7 @@ io.on('connection', (socket) => {
         return;
     }
 
-    // If player can shut tiles, emit diceRolled event
-    io.to(data.roomId).emit('diceRolled', {
-        diceTotal: data.diceTotal,
-        currentPlayer: currentPlayer
-    });
+    // If player can shut tiles, do nothing else (wait for shutTile/endTurn)
   });
 
   // Handle tile shutting
@@ -133,6 +149,13 @@ io.on('connection', (socket) => {
     const roomState = roomStates[data.roomId];
     if (!roomState) {
       console.log('No room state found for roomId:', data.roomId);
+      return;
+    }
+
+    const currentPlayer = roomState.currentPlayer;
+    // Validate that the socket is the current player
+    if (!roomPlayers[data.roomId] || roomPlayers[data.roomId][currentPlayer] !== socket.id) {
+      console.log('shutTile rejected: not current player');
       return;
     }
 
@@ -196,6 +219,14 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('A user disconnected:', socket.id);
+    // Remove socket from roomPlayers
+    for (const roomId in roomPlayers) {
+      for (const playerNum in roomPlayers[roomId]) {
+        if (roomPlayers[roomId][playerNum] === socket.id) {
+          delete roomPlayers[roomId][playerNum];
+        }
+      }
+    }
   });
 });
 

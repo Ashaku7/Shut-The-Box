@@ -79,6 +79,75 @@
             color: #ffcc00;
             min-height: 24px;
         }
+        .instructions-btn {
+            position: fixed;
+            top: 32px;
+            right: 40px;
+            z-index: 100;
+            padding: 12px 28px;
+            font-size: 1.1rem;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            background: linear-gradient(90deg, #ffe082 0%, #b8894a 100%);
+            color: #4a2c0a;
+            border: 2px solid #a97c50;
+            border-radius: 10px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            box-shadow: 0 2px 8px #5a3310a0;
+            cursor: pointer;
+            transition: background 0.3s, box-shadow 0.3s, transform 0.1s;
+        }
+        .instructions-btn:hover {
+            background: linear-gradient(90deg, #ffe082 0%, #d2b48c 100%);
+            color: #7b4a19;
+            box-shadow: 0 4px 16px #5a3310a0;
+            transform: translateY(-2px) scale(1.04);
+        }
+        .instructions-modal-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.45);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .instructions-modal {
+            background: #fffbe7;
+            color: #4a2c0a;
+            border-radius: 18px;
+            box-shadow: 0 8px 32px #5a3310a0, 0 0 0 4px #ffe082;
+            padding: 36px 40px 32px 40px;
+            max-width: 480px;
+            width: 90vw;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: 1.1rem;
+            position: relative;
+            z-index: 2001;
+            text-align: left;
+        }
+        .instructions-modal h2 {
+            margin-top: 0;
+            color: #b8894a;
+            font-size: 2rem;
+            margin-bottom: 18px;
+            text-align: center;
+        }
+        .instructions-modal ul {
+            margin-left: 1.2em;
+            margin-bottom: 1em;
+        }
+        .instructions-close {
+            position: absolute;
+            top: 16px;
+            right: 20px;
+            font-size: 1.5rem;
+            color: #b8894a;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
         @media (max-width: 700px) {
             h1 { font-size: 1.4rem; }
             .mode-btn { font-size: 1.1rem; padding: 12px 0; }
@@ -92,7 +161,30 @@
         <button class="mode-btn" id="one-player-btn">1 Player</button>
         <button class="mode-btn" id="two-player-btn">2 Player</button>
         <button class="mode-btn" id="play-bot-btn">Play with Bot</button>
+        <button class="instructions-btn" id="instructions-btn">Instructions</button>
         <div id="message"></div>
+    </div>
+    <div id="instructions-modal-bg" class="instructions-modal-bg" style="display:none;">
+        <div class="instructions-modal">
+            <button class="instructions-close" id="instructions-close">&times;</button>
+            <h2>How to Play Shut the Box</h2>
+            <ul>
+                <li><b>Goal:</b> Shut as many numbered tiles as possible by rolling dice and selecting tile combinations that match the roll.</li>
+            </ul>
+            <ol>
+                <li>On your turn, roll the dice.</li>
+                <li>Add up the total of the dice.</li>
+                <li>Select any combination of open tiles that add up to the dice total.</li>
+                <li>Shut (close) those tiles.</li>
+                <li>If you can’t make a move, your turn ends.</li>
+                <li>The game ends when no more moves are possible or all tiles are shut.</li>
+                <li>The player with the lowest total of remaining tiles wins!</li>
+            </ol>
+            <ul>
+                <li><b>Tip1:</b> Try to shut higher numbers first for a better score.</li>
+                <li><b>Tip2:</b> Any number of tiles can be shut at once(more than one tile can be shut at once).</li>
+            </ul>
+        </div>
     </div>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -120,6 +212,22 @@
                 window.location.href = 'offline_bot.html';
             });
         });
+
+    // Instructions modal logic
+    const instructionsBtn = document.getElementById('instructions-btn');
+    const instructionsModalBg = document.getElementById('instructions-modal-bg');
+    const instructionsClose = document.getElementById('instructions-close');
+    instructionsBtn.addEventListener('click', () => {
+        instructionsModalBg.style.display = 'flex';
+    });
+    instructionsClose.addEventListener('click', () => {
+        instructionsModalBg.style.display = 'none';
+    });
+    instructionsModalBg.addEventListener('click', (e) => {
+        if (e.target === instructionsModalBg) {
+            instructionsModalBg.style.display = 'none';
+        }
+    });
     </script>
 </body>
 </html>

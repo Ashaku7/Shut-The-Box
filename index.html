@@ -214,7 +214,6 @@
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script>
 // 3D Shut the Box board.glb model for landing page with OrbitControls
 const canvas = document.querySelector('.threejs-bg');
@@ -227,18 +226,32 @@ const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerH
 camera.position.set(0, 13, 28);
 camera.lookAt(0, 0, 0);
 
-// OrbitControls for 360° interaction (rotation only)
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.enablePan = false;
-controls.enableZoom = false;
-controls.minDistance = camera.position.length();
-controls.maxDistance = camera.position.length();
-controls.maxPolarAngle = Math.PI / 1.8;
-controls.minPolarAngle = 0.1;
-controls.target.set(0, 0, 0);
-controls.update();
+// Mouse-based board rotation
+let targetRotY = 0;
+let targetRotX = 0.18; // initial tilt
+let currentRotY = 0;
+let currentRotX = 0.18;
+let boardModel = null;
+
+function onMouseMove(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+    // Horizontal: -PI to PI (full 360)
+    targetRotY = (x - 0.5) * Math.PI * 2;
+    // Vertical: limit tilt (e.g., -0.4 to 0.4 radians)
+    targetRotX = 0.18 + (y - 0.5) * 0.7;
+    targetRotX = Math.max(-0.5, Math.min(0.7, targetRotX));
+}
+renderer.domElement.addEventListener('mousemove', onMouseMove);
+
+// For touch devices
+renderer.domElement.addEventListener('touchmove', function(e) {
+    if (e.touches.length > 0) {
+        const touch = e.touches[0];
+        onMouseMove({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: ()=>{}, stopPropagation: ()=>{} });
+    }
+}, { passive: false });
 
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
@@ -250,12 +263,11 @@ scene.add(dirLight);
 
 // Load 3D board.glb model
 const loader = new THREE.GLTFLoader();
-let boardModel;
 loader.load('/board.glb', function(gltf) {
     boardModel = gltf.scene;
     boardModel.position.set(0, 0.5, 0);
     boardModel.scale.set(8.5, 8.5, 8.5);
-    boardModel.rotation.set(0.18, Math.PI / 8, 0); // slight tilt for realism
+    boardModel.rotation.set(currentRotX, 0, 0);
     scene.add(boardModel);
 }, undefined, function(error) {
     console.error('Error loading board.glb:', error);
@@ -263,7 +275,13 @@ loader.load('/board.glb', function(gltf) {
 
 function animate() {
     requestAnimationFrame(animate);
-    controls.update();
+    // Smoothly interpolate rotation
+    currentRotY += (targetRotY - currentRotY) * 0.08;
+    currentRotX += (targetRotX - currentRotX) * 0.08;
+    if (boardModel) {
+        boardModel.rotation.y = currentRotY;
+        boardModel.rotation.x = currentRotX;
+    }
     renderer.render(scene, camera);
 }
 animate();

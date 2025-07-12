@@ -160,7 +160,7 @@
         let tiles = [];
         let diceLoaded = false;
         let sumDisplayed = false; // Global flag to ensure sum is displayed only once per roll
-        let rollTimeout = null; // Timer for dice roll timeout
+        let rollTimeoutId = null; // Timer for dice roll timeout
         const ROLL_TIMEOUT_MS = 3000; // 3 seconds compulsory timeout
         
         // Three.js variables
@@ -203,10 +203,11 @@
         rollBtn.addEventListener('click', rollDice);
         endTurnBtn.addEventListener('click', endTurn);
         newGameBtn.addEventListener('click', resetGame);
-        if (retryRollBtn) retryRollBtn.addEventListener('click', () => {
-            retryRollBtn.style.display = 'none';
-            rollDice(true);
-        });
+        // Remove retry button logic for strict auto-reroll
+        // if (retryRollBtn) retryRollBtn.addEventListener('click', () => {
+        //     retryRollBtn.style.display = 'none';
+        //     rollDice(true);
+        // });
         
         // Initialize the game
         function init() {
@@ -498,21 +499,27 @@ function addDiceEvents(dice, diceIdx) {
             }
     
             if (allSettled) {
-                // Determine dice face values
+                if (rollTimeoutId) {
+                    clearTimeout(rollTimeoutId);
+                    rollTimeoutId = null;
+                }
+                let unreadable = false;
                 for (let i = 0; i < diceArray.length; i++) {
                     const dice = diceArray[i];
-                    console.log(`Dice ${i} quaternion:`, dice.body.quaternion);
                     const faceValue = getDiceFaceValue(dice.body.quaternion);
-                    console.log(`Dice ${i} faceValue: ${faceValue}`);
                     if (faceValue) {
                         currentResult[i] = faceValue;
                     } else {
-                        // If face detection fails, keep rolling
-                        return;
+                        unreadable = true;
+                        break;
                     }
                 }
-                console.log(`checkDiceSettled: currentResult=${currentResult}`);
-    
+                if (unreadable) {
+                    // If any die is unreadable, reroll immediately
+                    statusMessage.textContent = "Dice unreadable. Re-rolling automatically...";
+                    rollDice();
+                    return;
+                }
                 if (!sumDisplayed && currentResult[0] !== 0 && currentResult[1] !== 0) {
                     const sum = currentResult.reduce((a, v) => a + v, 0);
                     console.log(`Both dice settled. Sum: ${sum}`);
@@ -529,9 +536,9 @@ function addDiceEvents(dice, diceIdx) {
                     sumDisplayed = true;
 
                     // Clear the roll timeout since dice have settled
-                    if (rollTimeout) {
-                        clearTimeout(rollTimeout);
-                        rollTimeout = null;
+                    if (rollTimeoutId) {
+                        clearTimeout(rollTimeoutId);
+                        rollTimeoutId = null;
                     }
 
                     // Check if any valid moves are available
@@ -543,29 +550,24 @@ function addDiceEvents(dice, diceIdx) {
         }
         
         // Roll dice function
-function rollDice(force = false) {
-    if (!gameActive || !diceLoaded) return;
-    if (isRolling && !force) return;
-    console.log('rollDice function called');
+function rollDice(forceReroll = false) {
+    if (!gameActive || isRolling || !diceLoaded) return;
     isRolling = true;
     rollBtn.disabled = true;
     statusMessage.textContent = "Rolling...";
     sumDisplayed = false;
-    console.log('Roll started, sumDisplayed reset to false');
-    currentResult = [0, 0];
-    // Clear any existing timeout before starting a new roll
-    if (rollTimeout) {
-        clearTimeout(rollTimeout);
-        rollTimeout = null;
-    }
     if (retryRollBtn) retryRollBtn.style.display = 'none';
-    // Start a new compulsory timeout for this roll
-    rollTimeout = setTimeout(() => {
-        if (!sumDisplayed && retryRollBtn) {
-            console.warn('Dice roll compulsory timeout reached, show Retry Roll button.');
-            retryRollBtn.style.display = 'inline-block';
+    if (rollTimeoutId) {
+        clearTimeout(rollTimeoutId);
+        rollTimeoutId = null;
+    }
+    // Start 3 second timer to auto-reroll if dice roll takes too long
+    rollTimeoutId = setTimeout(() => {
+        if (isRolling && !sumDisplayed) {
+            statusMessage.textContent = "Dice stuck. Re-rolling automatically...";
+            rollDice(true);
         }
-    }, 4000); // 4 seconds
+    }, 3000);
 
     // Apply random forces, positions, and rotations to dice
     diceArray.forEach((d, dIdx) => {
@@ -932,9 +934,9 @@ function rollDice(force = false) {
             newGameBtn.style.display = 'none';
             updateScoreDisplay();
             // Clear any roll timeout
-            if (rollTimeout) {
-                clearTimeout(rollTimeout);
-                rollTimeout = null;
+            if (rollTimeoutId) {
+                clearTimeout(rollTimeoutId);
+                rollTimeoutId = null;
             }
             if (retryRollBtn) retryRollBtn.style.display = 'none';
         }

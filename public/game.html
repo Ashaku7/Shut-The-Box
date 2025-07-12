@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -582,14 +583,13 @@ function rollDice() {
                 rollTimeoutId = null;
             }
 
-            // Start 4 second timer to show retry button if dice roll takes too long
+            // Start 3 second timer to auto-reroll if dice roll takes too long
             rollTimeoutId = setTimeout(() => {
                 if (isRolling && !sumDisplayed) {
-                    statusMessage.textContent = "Dice stuck. Please click Retry Roll.";
-                    retryRollBtn.style.display = 'inline-block';
-                    rollBtn.disabled = true;
+                    statusMessage.textContent = "Dice stuck. Re-rolling automatically...";
+                    rollDice();
                 }
-            }, 4000);
+            }, 3000);
             
             // Reset dice values
             currentResult = [0, 0];
@@ -795,11 +795,11 @@ function rollDice() {
         let rollTimeoutId = null; // Timer ID for dice roll timeout
         const retryRollBtn = document.getElementById('retry-roll-btn');
 
-        retryRollBtn.addEventListener('click', () => {
-            // Hide retry button and re-roll dice
-            retryRollBtn.style.display = 'none';
-            rollDice();
-        });
+        // Remove retry button logic for strict auto-reroll
+        // retryRollBtn.addEventListener('click', () => {
+        //     retryRollBtn.style.display = 'none';
+        //     rollDice();
+        // });
 
         
         // Check if player has valid moves

@@ -159,7 +159,7 @@ let diceTotal = 0;
 let tiles = [];
 let diceLoaded = false;
 let sumDisplayed = false;
-let rollTimeoutId = null;
+let rollTimeoutId = null; // Timer for dice roll timeout
 
 // Player 1: User, Player 2: Bot
 let currentPlayer = 1;
@@ -204,10 +204,11 @@ animate();
 rollBtn.addEventListener('click', () => rollDice(false));
 endTurnBtn.addEventListener('click', endTurn);
 newGameBtn.addEventListener('click', resetGame);
-retryRollBtn.addEventListener('click', () => {
-    retryRollBtn.style.display = 'none';
-    rollDice(currentPlayer === 2); // Pass isBot true if it's bot's turn
-});
+// Remove retry button logic for strict auto-reroll
+// retryRollBtn.addEventListener('click', () => {
+//     retryRollBtn.style.display = 'none';
+//     rollDice(currentPlayer === 2); // Pass isBot true if it's bot's turn
+// });
 
 function init() {
     scene = new THREE.Scene();
@@ -544,21 +545,23 @@ function botTurn() {
 }
 
 function rollDice(isBot = false) {
-    if (!gameActive || isRolling || (currentPlayer === 1 && isBot)) return;
+    if (!gameActive || isRolling || !diceLoaded) return;
     isRolling = true;
     rollBtn.disabled = true;
-    statusMessage.textContent = currentPlayer === 1 ? "Rolling..." : "Bot is rolling...";
+    statusMessage.textContent = "Rolling...";
     sumDisplayed = false;
-    currentResult = [0, 0];
-    // Start/Reset roll timeout
-    if (rollTimeoutId) clearTimeout(rollTimeoutId);
-    retryRollBtn.style.display = 'none';
+    if (retryRollBtn) retryRollBtn.style.display = 'none';
+    if (rollTimeoutId) {
+        clearTimeout(rollTimeoutId);
+        rollTimeoutId = null;
+    }
+    // Start 3 second timer to auto-reroll if dice roll takes too long
     rollTimeoutId = setTimeout(() => {
         if (isRolling && !sumDisplayed) {
-            statusMessage.textContent = "Dice stuck. Please click Retry Roll.";
-            retryRollBtn.style.display = 'inline-block';
+            statusMessage.textContent = "Dice stuck. Re-rolling automatically...";
+            rollDice(isBot);
         }
-    }, 4000); // 4 seconds
+    }, 3000);
     const diceRollParams = [];
     const quaternion = new THREE.Quaternion();
     diceArray.forEach((d, dIdx) => {
@@ -606,20 +609,26 @@ function checkDiceSettled() {
         }
     }
     if (allSettled) {
-        // Clear roll timeout if dice settled
         if (rollTimeoutId) {
             clearTimeout(rollTimeoutId);
             rollTimeoutId = null;
         }
-        retryRollBtn.style.display = 'none'; // Hide retry button if dice settle
+        let unreadable = false;
         for (let i = 0; i < diceArray.length; i++) {
             const dice = diceArray[i];
             const faceValue = getDiceFaceValue(dice.body.quaternion);
             if (faceValue) {
                 currentResult[i] = faceValue;
             } else {
-                return;
+                unreadable = true;
+                break;
             }
+        }
+        if (unreadable) {
+            // If any die is unreadable, reroll immediately
+            statusMessage.textContent = "Dice unreadable. Re-rolling automatically...";
+            rollDice(currentPlayer === 2);
+            return;
         }
         if (!sumDisplayed && currentResult[0] !== 0 && currentResult[1] !== 0) {
             const sum = currentResult.reduce((a, v) => a + v, 0);

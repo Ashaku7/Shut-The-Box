@@ -887,36 +887,38 @@ retryRollBtn.addEventListener('click', () => {
 
 function checkDiceSettled() {
     if (!isRolling) return;
-
     let allSettled = true;
     for (let i = 0; i < diceArray.length; i++) {
         const dice = diceArray[i];
         const velocity = dice.body.velocity.length();
         const angularVelocity = dice.body.angularVelocity.length();
-
         if (velocity > 0.1 || angularVelocity > 0.1) {
             allSettled = false;
             break;
         }
     }
-
     if (allSettled) {
         if (rollTimeoutId) {
             clearTimeout(rollTimeoutId);
             rollTimeoutId = null;
         }
         if (retryRollBtn) retryRollBtn.style.display = 'none';
-
+        let unreadable = false;
         for (let i = 0; i < diceArray.length; i++) {
             const dice = diceArray[i];
             const faceValue = getDiceFaceValue(dice.body.quaternion);
             if (faceValue) {
                 currentResult[i] = faceValue;
             } else {
-                return;
+                unreadable = true;
+                break;
             }
         }
-
+        if (unreadable) {
+            statusMessage.textContent = "Dice unreadable. Re-rolling automatically...";
+            rollDice(true);
+            return;
+        }
         if (!sumDisplayed && currentResult[0] !== 0 && currentResult[1] !== 0) {
             const sum = currentResult.reduce((a, v) => a + v, 0);
             diceTotal = sum;
@@ -960,7 +962,6 @@ function rollDice(force = false) {
     statusMessage.textContent = "Rolling...";
     sumDisplayed = false;
     currentResult = [0, 0];
-    // Clear any existing timeout before starting a new roll
     if (rollTimeoutId) {
         clearTimeout(rollTimeoutId);
         rollTimeoutId = null;
@@ -968,11 +969,11 @@ function rollDice(force = false) {
     if (retryRollBtn) retryRollBtn.style.display = 'none';
     // Start a new compulsory timeout for this roll
     rollTimeoutId = setTimeout(() => {
-        if (!sumDisplayed && retryRollBtn) {
-            statusMessage.textContent = "Dice stuck. Please click Retry Roll.";
-            retryRollBtn.style.display = 'inline-block';
+        if (isRolling && !sumDisplayed) {
+            statusMessage.textContent = "Dice stuck. Re-rolling automatically...";
+            rollDice(true);
         }
-    }, 4000); // 4 seconds
+    }, 3000);
 
     // Generate dice roll parameters to send to server
     const diceRollParams = [];

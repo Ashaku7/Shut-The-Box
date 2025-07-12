@@ -10,7 +10,7 @@ const roomStates = {};
 
 const io = new Server(server, {
   cors: {
-    origin: true,
+    origin: " https://shut-the-chquzjwis-ashaku7s-projects.vercel.app",
     methods: ["GET", "POST"]
   }
 });

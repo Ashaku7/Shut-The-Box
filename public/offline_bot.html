@@ -50,22 +50,37 @@
             z-index: 2;
         }
         button {
-            padding: 12px 24px;
+            padding: 12px 28px;
             font-size: 18px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            background: linear-gradient(90deg, #b8894a 0%, #7b4a19 100%);
+            color: #fffbe7;
+            border: 2px solid #a97c50;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px #5a3310a0, 0 0 0 2px #fffbe7 inset;
             cursor: pointer;
-            transition: background-color 0.3s ease;
-            z-index: 2;
+            transition: background 0.3s, box-shadow 0.3s, transform 0.1s;
+            font-weight: bold;
+            letter-spacing: 1px;
+            text-shadow: 1px 1px 2px #5a3310a0;
         }
-        button:hover {
-            background-color: #45a049;
+        button:hover:not(:disabled) {
+            background: linear-gradient(90deg, #d2b48c 0%, #a97c50 100%);
+            color: #4a2c0a;
+            box-shadow: 0 4px 16px #5a3310a0, 0 0 0 2px #fffbe7 inset;
+            transform: translateY(-2px) scale(1.04);
+        }
+        button:active:not(:disabled) {
+            background: linear-gradient(90deg, #a97c50 0%, #7b4a19 100%);
+            color: #fffbe7;
+            box-shadow: 0 1px 4px #5a3310a0, 0 0 0 2px #fffbe7 inset;
+            transform: translateY(1px) scale(0.98);
         }
         button:disabled {
-            background-color: #cccccc;
+            background: #cccccc;
+            color: #a97c50;
             cursor: not-allowed;
+            box-shadow: none;
         }
         .status {
             position: absolute;
@@ -73,12 +88,17 @@
             left: 50%;
             transform: translateX(-50%);
             padding: 10px 20px;
-            background-color: rgba(255, 255, 255, 0.8);
+            background: #4a2c0aee;
+            color: #fffbe7;
+            border: 2px solid #a97c50;
             border-radius: 5px;
-            font-size: 18px;
+            font-size: 1.3rem;
+            font-family: 'Georgia', 'Times New Roman', serif;
             font-weight: bold;
             text-align: center;
             z-index: 2;
+            letter-spacing: 1px;
+            text-shadow: 1px 1px 2px #5a3310a0;
         }
         #loading {
             position: fixed;
@@ -113,8 +133,9 @@
                 <span id="scoreText2">Bot: 0</span>
             </div>
         </div>
-        <div id="label-you" style="position: absolute; left: 50%; top: 120px; transform: translateX(-50%); font-size: 22px; font-weight: bold; color: #4CAF50; background: rgba(255,255,255,0.85); padding: 4px 18px; border-radius: 8px; z-index: 3; pointer-events: none;">You</div>
-        <div id="label-bot" style="position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); font-size: 22px; font-weight: bold; color: #2196F3; background: rgba(255,255,255,0.85); padding: 4px 18px; border-radius: 8px; z-index: 3; pointer-events: none;">Bot</div>
+        <!-- Player labels for professional look -->
+        <div id="player1-label" style="position: absolute; left: 50%; top: 110px; transform: translateX(-50%); z-index: 10; font-family: 'Georgia', 'Times New Roman', serif; font-size: 1.4rem; color: #fffbe7; background: #4a2c0aee; border-radius: 10px; padding: 8px 24px; border: 2px solid #a97c50; box-shadow: 0 2px 8px #5a3310a0; display: flex; align-items: center; gap: 10px; letter-spacing: 1px; text-shadow: 1px 1px 2px #5a3310a0;"><span style='font-size:1.5rem;'>🧑‍💻</span> You</div>
+        <div id="player2-label" style="position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%); z-index: 10; font-family: 'Georgia', 'Times New Roman', serif; font-size: 1.4rem; color: #fffbe7; background: #4a2c0aee; border-radius: 10px; padding: 8px 24px; border: 2px solid #a97c50; box-shadow: 0 2px 8px #5a3310a0; display: flex; align-items: center; gap: 10px; letter-spacing: 1px; text-shadow: 1px 1px 2px #5a3310a0;"><span style='font-size:1.5rem;'>🤖</span> Bot</div>
         <div id="sumDisplay" style="display:none; position: absolute; top: 10px; left: 10px; color: white; font-size: 24px; font-family: monospace; background: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 5px; z-index: 10;"></div>
         <div class="ui-container">
             <button id="roll-btn">Roll Dice</button>

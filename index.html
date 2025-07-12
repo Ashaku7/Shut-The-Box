@@ -251,7 +251,7 @@ scene.add(dirLight);
 // Load 3D board.glb model
 const loader = new THREE.GLTFLoader();
 let boardModel;
-loader.load('board.glb', function(gltf) {
+loader.load('public/board.glb', function(gltf) {
     boardModel = gltf.scene;
     boardModel.position.set(0, 0.5, 0);
     boardModel.scale.set(8.5, 8.5, 8.5);

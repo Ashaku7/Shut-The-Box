@@ -147,6 +147,62 @@
             text-shadow: 1px 1px 2px #5a3310a0;
             display: none;
         }
+        /* Chatbox Styles */
+        .chat-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+        }
+        .chat-messages {
+            overflow-y: auto;
+            padding: 15px;
+            height: 250px; /* Adjust as needed */
+        }
+        .chat-messages::-webkit-scrollbar {
+            width: 8px;
+        }
+        .chat-messages::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+        .chat-input {
+            display: flex;
+            padding: 10px 15px;
+        }
+        .chat-input input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 0 0 0 15px;
+            outline: none;
+            font-size: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+        .chat-input input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .chat-input button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 0 0 15px 0;
+            background: #b8894a;
+            color: #fff;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .chat-input button:hover {
+            background: #d2b48c;
+        }
     </style>
 </head>
 <body>
@@ -184,6 +240,18 @@
             <button id="retry-roll-btn" style="display: none;">Retry Roll</button>
         </div>
     </div>
+    <!-- Enhanced Chatbox UI -->
+    <div class="chat-panel glass" id="chat-panel" style="position: absolute; right: 32px; bottom: 120px; width: 320px; max-height: 380px; min-height: 120px; height: 300px; z-index: 50; display: flex; flex-direction: column; resize: vertical; overflow: hidden;">
+        <div style="padding: 10px 0 4px 0; text-align: center; font-weight: bold; font-size: 1.1rem; letter-spacing: 1px; color: #b8894a; user-select: none;">Chatbox</div>
+        <div class="chat-messages" id="chat-messages" style="flex:1 1 160px; min-height:100px; max-height:200px; overflow-y:auto; padding:10px; font-size:1rem; color:#2d1e0f; background:rgba(255,255,255,0.12);" aria-live="polite" aria-label="Chat messages"></div>
+        <div id="typing-indicator" style="height:18px; font-size:0.95em; color:#888; margin-left:18px; display:none;">Player is typing...</div>
+        <div class="chat-input" style="display:flex; border-top:1px solid #eee; align-items:center; padding:6px 8px;">
+            <button id="emoji-btn" title="Insert emoji" style="background:none; border:none; font-size:1.2rem; cursor:pointer; margin-right:4px;">😊</button>
+            <input type="text" id="chat-input" placeholder="Type a message..." style="flex:1; border:none; padding:7px 8px; font-size:0.98rem; border-radius:0 0 0 14px; outline:none; min-width:0;" aria-label="Chat input">
+            <button id="chat-send" style="border:none; background:#b8894a; color:#fff; font-size:1.08rem; padding:7px 14px; border-radius:0 0 14px 0; cursor:pointer; margin-left:4px;">Send</button>
+        </div>
+    </div>
+    <div id="emoji-picker" style="display:none; position:absolute; z-index:1001; background:rgba(255,255,255,0.98); border-radius:12px; box-shadow:0 4px 24px #0002; padding:10px; font-size:1.3rem; max-width:220px; max-height:180px; overflow:auto;"></div>
 
     <!-- Import socket.io client -->
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
@@ -1269,6 +1337,97 @@ function updatePlayerScoresUI() {
             console.log(`Checking valid moves for Player ${player}, roll: ${roll}, available tiles:`, availableTiles);
             return canSumToTarget(availableTiles, roll);
         }
+    // === ENHANCED CHATBOX SOCKET.IO LOGIC ===
+    const chatPanel = document.getElementById('chat-panel');
+    const chatMessages = document.getElementById('chat-messages');
+    const chatInput = document.getElementById('chat-input');
+    const chatSend = document.getElementById('chat-send');
+    const typingIndicator = document.getElementById('typing-indicator');
+    const emojiBtn = document.getElementById('emoji-btn');
+    const emojiPicker = document.getElementById('emoji-picker');
+    // --- Emoji Picker ---
+    const emojiList = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😍','😘','😜','🤩','🥳','😎','🤓','😏','😤','😭','😱','😡','👍','👎','🙏','👏','🙌','💯','🔥','🎲','🏆','🎉','🥇','🥈','🥉','💬'];
+    emojiBtn.onclick = e => {
+        emojiPicker.innerHTML = emojiList.map(e=>`<span style='cursor:pointer;padding:4px;' tabindex='0'>${e}</span>`).join('');
+        const rect = emojiBtn.getBoundingClientRect();
+        emojiPicker.style.left = (rect.left-emojiPicker.offsetWidth/2+30)+"px";
+        emojiPicker.style.top = (rect.top-emojiPicker.offsetHeight-10)+window.scrollY+"px";
+        emojiPicker.style.display = emojiPicker.style.display==='block'?'none':'block';
+    };
+    emojiPicker.onclick = e => {
+        if (e.target.tagName==='SPAN') {
+            chatInput.value += e.target.textContent;
+            chatInput.focus();
+            emojiPicker.style.display = 'none';
+        }
+    };
+    document.addEventListener('click', e => {
+        if (!emojiPicker.contains(e.target) && e.target!==emojiBtn) emojiPicker.style.display = 'none';
+    });
+    // --- Typing Indicator ---
+    let typingTimeout;
+    chatInput.oninput = () => {
+        socket.emit('typing', { roomId: roomInput.value.trim() });
+    };
+    socket.on('typing', () => {
+        typingIndicator.style.display = 'block';
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(()=>typingIndicator.style.display='none', 1200);
+    });
+    // --- Auto-focus on panel click ---
+    chatPanel.onclick = e => {
+        if (e.target === chatPanel) chatInput.focus();
+    };
+    // --- Send message ---
+    chatSend.onclick = sendChat;
+    chatInput.onkeydown = e => { if (e.key === 'Enter') sendChat(); };
+    function sendChat() {
+        const msg = chatInput.value.trim();
+        if (!msg) return;
+        socket.emit('chatMessage', {
+            roomId: roomInput.value.trim(),
+            message: msg
+        });
+        appendChatMessage('You', msg, true);
+        chatInput.value = '';
+    }
+    // --- Append message with timestamp and animation ---
+    function appendChatMessage(sender, msg, self=false) {
+        const div = document.createElement('div');
+        const now = new Date();
+        const time = now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+        div.innerHTML = `<span style='color:#b8894a;font-weight:bold;'>${sender}:</span> <span>${msg}</span> <span style='float:right;font-size:0.85em;color:#888;'>${time}</span>`;
+        div.style.opacity = 0;
+        div.style.transition = 'opacity 0.4s';
+        div.setAttribute('tabindex','0');
+        div.setAttribute('role','listitem');
+        chatMessages.appendChild(div);
+        setTimeout(()=>{div.style.opacity=1;}, 10);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        if (self) div.setAttribute('aria-label',`You: ${msg}`);
+    }
+    // --- Listen for messages from server ---
+    socket.on('chatMessage', data => {
+        appendChatMessage(data.sender, data.message);
+    });
+    // --- Accessibility: ARIA roles ---
+    chatMessages.setAttribute('role','list');
+    chatInput.setAttribute('aria-label','Chat input');
+    chatSend.setAttribute('aria-label','Send message');
+    emojiBtn.setAttribute('aria-label','Insert emoji');
+    // --- Keyboard navigation for emoji picker ---
+    emojiPicker.addEventListener('keydown', e => {
+        if (e.key==='ArrowRight'||e.key==='ArrowLeft') {
+            let emojis = Array.from(emojiPicker.querySelectorAll('span'));
+            let idx = emojis.indexOf(document.activeElement);
+            if (e.key==='ArrowRight') idx = (idx+1)%emojis.length;
+            else idx = (idx-1+emojis.length)%emojis.length;
+            emojis[idx].focus();
+        } else if (e.key==='Enter') {
+            document.activeElement.click();
+        }
+    });
+    // --- End Enhanced Chatbox ---
     </script>
 </body>
 </html>

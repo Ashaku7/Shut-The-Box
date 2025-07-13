@@ -217,6 +217,25 @@ io.on('connection', (socket) => {
     });
   });
 
+  // --- Multiplayer Chat Relay ---
+  socket.on('chatMessage', (data) => {
+    // Determine sender (Player 1 or 2)
+    let sender = 'Player';
+    if (roomPlayers[data.roomId]) {
+      sender = Object.entries(roomPlayers[data.roomId]).find(([num, id]) => id === socket.id);
+      sender = sender ? `Player ${sender[0]}` : 'Player';
+    }
+    // Broadcast to everyone in the room except the sender
+    socket.to(data.roomId).emit('chatMessage', {
+      sender: sender,
+      message: data.message
+    });
+  });
+  // --- Typing Indicator Relay ---
+  socket.on('typing', (data) => {
+    socket.to(data.roomId).emit('typing');
+  });
+
   socket.on('disconnect', () => {
     console.log('A user disconnected:', socket.id);
     // Remove socket from roomPlayers

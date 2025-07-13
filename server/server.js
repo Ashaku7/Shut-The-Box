@@ -10,7 +10,7 @@ const roomStates = {};
 
 const io = new Server(server, {
   cors: {
-    origin: "https://shut-the-dxwvgdw9k-ashaku7s-projects.vercel.app",
+    origin: "https://shut-the-9fjkpauyt-ashaku7s-projects.vercel.app",
     methods: ["GET", "POST"]
   }
 });
